@@ -683,6 +683,8 @@ local function BuildDefaults()
             -- auras (small icons above the name)
             showBuffs = false, showDebuffs = true,
             debuffsMine = true,         -- only the debuffs you cast
+            buffFilter = "ALL",         -- ALL | PURGE (dispellable / stealable) | IMPORTANT_PURGE (important or dispellable)
+            buffTypeEdge = false,       -- buffs: edge in their type's colour (magic blue)
             auraSize = 15, auraMax = 5, auraRows = 1, auraGap = 1,
             auraTimer = true, auraTimerSize = 0,    -- time left on the icons; size 0: from the icon size
         },

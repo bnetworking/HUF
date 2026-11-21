@@ -257,6 +257,7 @@ local function Layout(p)
     d.enabled, d.kind, d.mine = s.showDebuffs, "HARMFUL", s.debuffsMine
     d.anchor, d.growH, d.point = "BOTTOMLEFT", "RIGHT", { "BOTTOMLEFT", a, "BOTTOMLEFT", 0, 0 }
     bf.enabled, bf.kind, bf.mine = s.showBuffs, "HELPFUL", false
+    bf.filter, bf.dispelBorder = s.buffFilter or "ALL", s.buffTypeEdge and true or false
     bf.anchor, bf.growH, bf.point = "BOTTOMRIGHT", "LEFT", { "BOTTOMRIGHT", a, "BOTTOMRIGHT", 0, 0 }
     p.auraRows.debuffs:Configure(d)
     p.auraRows.buffs:Configure(bf)

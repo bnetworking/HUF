@@ -556,6 +556,12 @@ local function ConvertNameplates(s, n, notes)
     n.auraGap = math.floor(Num(G("debuffSpacing"), 2) + 0.5)
     n.auraTimer = true
     n.auraTimerSize = math.floor(Num(s.auraDurationTextSize, 11) + 0.5)
+    -- enemy buffs: Ellesmere's buff slot (off: "none") and its enemy buff
+    -- filter (WoW Forever default: all); its dispel glow becomes the type edge
+    n.showBuffs = (s.buffSlot or "left") ~= "none"
+    local bm = s.npEnemyBuffFilter or "showall"
+    n.buffFilter = (bm == "dispellable" and "PURGE") or (bm == "important" and "IMPORTANT_PURGE") or "ALL"
+    n.buffTypeEdge = s.dispelGlow == true
     -- threat colours on the bar (Ellesmere's default on WoW Forever: always)
     local tmode = s.threatColorMode or "always"
     if s.threatColorHealth == false or tmode == "never" then n.threatBar = "OFF"

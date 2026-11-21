@@ -58,6 +58,12 @@ A.Filter = Filter
 --   cfg.ccFirst (debuffs): crowd control leads the row
 --   cfg.hideSated (debuffs): no Sated / Exhaustion and the like
 A.SLOTS = { "lead", "main", "extra" }
+-- the game's own tokens: "dispellable by anyone" (purges, enrages; whatever
+-- your class) and "important". Checked by the game, so they also work on
+-- enemies whose buffs addons may not read.
+local AF = AuraUtil and AuraUtil.AuraFilters
+local DISPELLABLE = (AF and AF.Dispellable) or "DISPELLABLE"
+local IMPORTANT = (AF and AF.Important) or "IMPORTANT"
 local function SortKey(t) if t:sub(1, 1) == "!" then return t:sub(2) .. "!" end return t end
 -- one spelling per filter (the game reads each spelling once per unit)
 local function Make(base, mine, ...)
@@ -96,6 +102,12 @@ function A.Groups(cfg)
             g.extra = Make(base, mine, "EXTERNAL_DEFENSIVE", "!BIG_DEFENSIVE")
         elseif f == "CANCELABLE" then
             g.main = Make(base, mine, "CANCELABLE")
+        elseif f == "PURGE" then
+            -- enemies: the ones you (or anyone) can dispel or steal
+            g.main = Make(base, mine, DISPELLABLE)
+        elseif f == "IMPORTANT_PURGE" then
+            g.main = Make(base, mine, DISPELLABLE)
+            g.extra = Make(base, mine, IMPORTANT, "!" .. DISPELLABLE)
         else
             g.main = Make(base, mine)
         end
@@ -243,7 +255,7 @@ local function TeamEmpty(cfg)
 end
 
 -- a debuff's border in its type's colour (magic blue, curse purple, ...)
-local function WantDispel(cfg) return cfg.kind == "HARMFUL" and cfg.dispelBorder and true or false end
+local function WantDispel(cfg) return cfg.dispelBorder and true or false end
 local function BorderSize(cfg) return math.max(0, cfg.borderSize or 1) end
 local DISPEL_COLORS = {
     Magic = { 0.2, 0.6, 1 }, Curse = { 0.6, 0, 1 }, Disease = { 0.6, 0.4, 0 },
@@ -258,7 +270,7 @@ local function DispelOpts()
             local L = (Enum and Enum.CustomAuraButtonBorderStyle) or _G.AuraButtonBorderStyle
             s = L and L.Color
         end
-        dispelStyle = s ~= nil and { style = s, showWhenHarmful = true, showWhenHelpful = false } or false
+        dispelStyle = s ~= nil and { style = s, showWhenHarmful = true, showWhenHelpful = true } or false
     end
     return dispelStyle or nil
 end
