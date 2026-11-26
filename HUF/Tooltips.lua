@@ -7,7 +7,7 @@
 -- post-calls; forbidden tooltips are left alone; secret values are never
 -- read, only passed on.
 -- ns.db.tooltip = { enabled, anchor CURSOR_LEFT | CURSOR_RIGHT | FIXED, combatFixed,
---   targetOfTarget, title, spellID, bgColor, bgAlpha, border ACCENT | CUSTOM,
+--   targetOfTarget, title, spellID, bgColor, bgAlpha, border ACCENT | CUSTOM | NONE,
 --   borderColor, point }
 
 local _, ns = ...
@@ -33,10 +33,10 @@ local function Style(tt)
     local c = C()
     local bg = c.bgColor
     pcall(tt.NineSlice.SetCenterColor, tt.NineSlice, bg.r, bg.g, bg.b, c.bgAlpha or 0.85)
-    local r, g, b
-    if c.border == "CUSTOM" then r, g, b = c.borderColor.r, c.borderColor.g, c.borderColor.b
-    else r, g, b = UI.ACCENT[1], UI.ACCENT[2], UI.ACCENT[3] end
-    pcall(tt.NineSlice.SetBorderColor, tt.NineSlice, r, g, b, 1)
+    local r, g, b, a = 0, 0, 0, 0                -- NONE: the edge pieces fully transparent
+    if c.border == "CUSTOM" then r, g, b, a = c.borderColor.r, c.borderColor.g, c.borderColor.b, 1
+    elseif c.border ~= "NONE" then r, g, b, a = UI.ACCENT[1], UI.ACCENT[2], UI.ACCENT[3], 1 end
+    pcall(tt.NineSlice.SetBorderColor, tt.NineSlice, r, g, b, a)
 end
 TT.Style = Style
 

@@ -40,8 +40,9 @@ ns.RegisterPage("tooltips", "Tooltips", "utility", function(page)
     local ga = function() return math.floor((T().bgAlpha or 0.85) * 100 + 0.5) end
     local opacity = R:Slider("Background Opacity", 0, 100, 5, ga, function(v) T().bgAlpha = v / 100 end, "%d%%")
     opacity.EnableInput()
-    R:Cycle("Border", { { value = "ACCENT", text = "Accent colour" }, { value = "CUSTOM", text = "Own colour" } },
-        G("border"), S("border"), "The tooltip's edge in HUF's accent colour or a colour of your own.")
+    R:Cycle("Border", { { value = "ACCENT", text = "Accent colour" }, { value = "CUSTOM", text = "Own colour" },
+        { value = "NONE", text = "No border" } },
+        G("border"), S("border"), "The tooltip's edge in HUF's accent colour, a colour of your own, or no edge at all.")
     local bc = R:Color("Border Colour", G("borderColor"), S("borderColor"))
     table.insert(page.widgets, { Refresh = function()
         UI.SetActive(bc, T().enabled and T().border == "CUSTOM")
