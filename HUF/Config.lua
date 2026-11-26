@@ -464,6 +464,13 @@ ns.On("PLAYER_REGEN_ENABLED", function()
     end
 end)
 
+-- /rl = /reload, only while no other addon has it (EllesmereUI makes the same one, with
+-- the same check). A slash command runs inside the Enter key press, so the reload is allowed.
+if not SlashCmdList["RL"] then
+    SlashCmdList["RL"] = function() ReloadUI() end
+    SLASH_RL1 = "/rl"
+end
+
 SLASH_HUF1 = "/huf"
 SlashCmdList.HUF = function(msg)
     local raw = ns.Trim(msg)
