@@ -541,10 +541,36 @@ local function SpellInfo(id)
 end
 
 -- class icon before a bar (settings "icons" = CLASS); a class the game keeps
--- secret leaves the spot empty
+-- secret leaves the spot empty. "icons" = SPEC: the spec's icon (the game's
+-- own when it gives one, else HUF's, Specs.lua), the class icon until known.
 local CLASS_ICONS = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES"
+local gameSpecIcons = 0   -- rows the game gave a spec icon for (debug report)
+local function SpecIcon(src)
+    local ic = src.specIconID
+    if Plain(ic) and type(ic) == "number" and ic > 0 then
+        gameSpecIcons = gameSpecIcons + 1
+        return ic
+    end
+    if not ns.Specs then return nil end
+    local unit = RowUnit(src)
+    if not unit then return nil end
+    local class = src.classFilename
+    if not (Plain(class) and type(class) == "string" and class ~= "") then
+        class = ns.Safe(function() return select(2, UnitClass(unit)) end)
+    end
+    return ns.Specs.Icon(unit, class)
+end
 local function ClassIcon(r, src)
     if not r.iconOn then return end
+    if S().icons == "SPEC" then
+        local icon = SpecIcon(src)
+        if icon then
+            r.icon:SetTexture(icon)
+            r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            r.icon:Show()
+            return
+        end
+    end
     local class = src.classFilename
     local coords = Plain(class) and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class]
     if coords then
@@ -1448,7 +1474,7 @@ local function Layout()
     if c.titleAccent == false then w.sessionText:SetTextColor(1, 1, 1)
     else w.sessionText:SetTextColor(a[1], a[2], a[3]) end
     local tex = ns.TexturePath(c.texture)
-    local iconW = (c.icons == "CLASS") and c.rowHeight or 0
+    local iconW = (c.icons == "CLASS" or c.icons == "SPEC") and c.rowHeight or 0
     local bb, rb = c.barBgColor or { r = 0, g = 0, b = 0 }, c.rowBorder or 0
     for i = 1, ROW_POOL do
         local r = Row(i)
@@ -1827,6 +1853,18 @@ end
 
 function DM.Apply()
     DM.ApplyBlizzard()
+    -- spec icons: HUF inspects the group (Specs.lua) only while a window shows them
+    if ns.Specs then
+        local any = false
+        local d = ns.db.damageMeter
+        if d.enabled then
+            if d.icons == "SPEC" then any = true end
+            for _, wc in ipairs(type(d.windows) == "table" and d.windows or {}) do
+                if type(wc) == "table" and wc.icons == "SPEC" then any = true end
+            end
+        end
+        ns.Specs.SetWanted(any)
+    end
     if not Available() or not WantShown() then HideAll() return end
     local cfgs = DM.EnsureWindows()
     local count = S().windowCount
@@ -1945,6 +1983,8 @@ end
 -- debug report: what the meter hands out right now
 function DM.Report(add)
     local c = S()
+    add(("damage meter spec icons from the game: %d rows"):format(gameSpecIcons))
+    if ns.Specs then pcall(ns.Specs.Report, add) end
     add(("damage meter: available=%s enabled=%s windows=%s blizzard cvar=%s saved=%s"):format(
         tostring(Available()), tostring(c.enabled), tostring(c.windowCount),
         tostring(GetCV("damageMeterEnabled")), tostring(HUFDB.damageMeterCVar and HUFDB.damageMeterCVar.old)))

@@ -177,8 +177,8 @@ local function Tiles(page)
         { value = "CLASS", text = "Class" }, { value = "ACCENT", text = "Accent" }, { value = "STATIC", text = "Static" },
     }, "colorMode"), UI.ROW + 4)
     Pair(B, bt, Cl("Static colour", "color"), Dd("Icons", {
-        { value = "NONE", text = "None" }, { value = "CLASS", text = "Class" },
-    }, "icons", "A class icon before each bar."), UI.ROW + 4)
+        { value = "NONE", text = "None" }, { value = "CLASS", text = "Class" }, { value = "SPEC", text = "Spec" },
+    }, "icons", "An icon before each bar: the class, or the spec (the talent tree with the most points; HUF inspects your group for it out of combat, the class icon until it knows)."), UI.ROW + 4)
     Pair(B, bt, Sl("Background opacity", 0, 1, 0.05, "bgAlpha", "%.2f"), Sl("Empty bar opacity", 0, 1, 0.05, "barBgAlpha", "%.2f"))
     Pair(B, bt, Sl("Bar border", 0, 3, 1, "rowBorder"), Sl("Text size", 6, 20, 1, "fontSize"))
     local gfo, sfo = Opt("font")

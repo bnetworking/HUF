@@ -39,6 +39,7 @@ LootFeed.lua
 Tooltips.lua
 Reminders.lua
 Resets.lua
+Specs.lua
 Movers.lua
 Config.lua
 Search.lua
