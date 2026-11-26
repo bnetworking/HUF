@@ -632,6 +632,54 @@ local function BuildDefaults()
         },
         -- UI scale below the game's 0.64 (UIScale.lua); off: the game's own UI Scale
         uiScale = { enabled = false, scale = 0.64 },
+        -- action bars (ActionBars.lua): the game's buttons in HUF's bars; off = the game's bars
+        actionBars = {
+            enabled = false,
+            border = 1, borderAccent = false, borderColor = C(0, 0, 0), slotAlpha = 0.6,
+            fillGaps = false,           -- borders reaching over the spacing (solid lines); off: see-through gaps (EllesmereUI)
+            iconZoom = 0.055,           -- the icon's edge cut away on each side (EllesmereUI: 5.5 %)
+            keySize = 12, countSize = 12, keyColor = C(1, 1, 1),
+            -- the bars around them (ExtraBars.lua): HUF's XP / reputation bars, the game's micro
+            -- menu, bag bar and queue button held by HUF (place: where the game had it, first time).
+            -- On with HUF's action bars (each can be switched off); nothing while those are off
+            extra = {
+                hideBlizzardStatus = true,
+                xp = { enabled = true, width = 400, height = 10, text = "MOUSEOVER", textSize = 11, mouseover = false,
+                       hideMaxLevel = true, point = { "BOTTOM", "BOTTOM", 0, 4 } },
+                rep = { enabled = true, width = 400, height = 10, text = "MOUSEOVER", textSize = 11, mouseover = false,
+                        point = { "BOTTOM", "BOTTOM", 0, 18 } },
+                micro = { enabled = true, scale = 1, hidden = false, mouseover = false },
+                bags = { enabled = true, scale = 1, hidden = false, mouseover = false },
+                queue = { enabled = true, scale = 1, hidden = false, mouseover = false },
+            },
+            bars = {
+                MainBar = { enabled = true, buttons = 12, perRow = 12, size = 34, spacing = 2, point = { "BOTTOM", "BOTTOM", 0, 40 },
+                            mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar2 = { enabled = true, buttons = 12, perRow = 12, size = 34, spacing = 2, point = { "BOTTOM", "BOTTOM", 0, 76 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar3 = { enabled = true, buttons = 10, perRow = 5, size = 34, spacing = 2, point = { "BOTTOM", "BOTTOM", -312, 40 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar4 = { enabled = true, buttons = 10, perRow = 5, size = 34, spacing = 2, point = { "BOTTOM", "BOTTOM", 312, 40 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar5 = { enabled = false, buttons = 12, perRow = 1, size = 36, spacing = 2, point = { "RIGHT", "RIGHT", -48, 0 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar6 = { enabled = false, buttons = 12, perRow = 12, size = 36, spacing = 2, point = { "CENTER", "CENTER", 0, -200 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar7 = { enabled = false, buttons = 12, perRow = 12, size = 36, spacing = 2, point = { "CENTER", "CENTER", 0, -238 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                Bar8 = { enabled = false, buttons = 12, perRow = 12, size = 36, spacing = 2, point = { "CENTER", "CENTER", 0, -276 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                -- bars 9 / 10 borrow bar 7's / 8's buttons (action pages 2 and 10); keys = their own
+                Bar9 = { enabled = false, buttons = 12, perRow = 6, size = 30, spacing = 2, point = { "BOTTOM", "BOTTOM", -312, 118 },
+                         mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false, keys = {} },
+                Bar10 = { enabled = false, buttons = 12, perRow = 6, size = 30, spacing = 2, point = { "BOTTOM", "BOTTOM", 312, 118 },
+                          mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false, keys = {} },
+                StanceBar = { enabled = true, buttons = 10, perRow = 10, size = 30, spacing = 2, point = { "BOTTOM", "BOTTOM", -170, 118 },
+                              mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+                PetBar = { enabled = true, buttons = 10, perRow = 10, size = 30, spacing = 2, point = { "BOTTOM", "BOTTOM", 170, 118 },
+                           mouseover = false, hideHotkey = false, hideMacro = false, rowsUp = false },
+            },
+        },
         bags = {
             enabled = true,
             oneBag = true,              -- the game's "combined bags" option
@@ -1392,6 +1440,26 @@ ns.On("ADDON_LOADED", function(name)
             end
         end
         HUFDB.dataVersion = 25
+    end
+    -- 26: the bars around the action bars are on by default (they only act while HUF's
+    -- action bars are on); profiles saved with the first version had them off
+    if HUFDB.dataVersion < 26 then
+        for _, p in pairs(HUFDB.profiles or {}) do
+            local x = type(p) == "table" and type(p.actionBars) == "table" and p.actionBars.extra
+            if type(x) == "table" then
+                for _, k in ipairs({ "xp", "rep", "micro", "bags", "queue" }) do
+                    if type(x[k]) == "table" then x[k].enabled = true end
+                end
+            end
+        end
+        HUFDB.dataVersion = 26
+    end
+    -- 27: action bars - see-through gaps like EllesmereUI (the first versions closed them)
+    if HUFDB.dataVersion < 27 then
+        for _, p in pairs(HUFDB.profiles or {}) do
+            if type(p) == "table" and type(p.actionBars) == "table" then p.actionBars.fillGaps = false end
+        end
+        HUFDB.dataVersion = 27
     end
     HUFDB.profiles = HUFDB.profiles or {}
     HUFDB.chars = HUFDB.chars or {}

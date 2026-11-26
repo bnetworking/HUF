@@ -1483,6 +1483,19 @@ local function Convert(prof, uf, np, npOn, dm, dmOn)
         notes[#notes + 1] = "UI scale: HUF uses it once EllesmereUI is off (while it is on, EllesmereUI sets the scale)."
     end
 
+    -- action bars (ActionBars.lua; the same bar keys)
+    local abA = prof and prof.addons and prof.addons["EllesmereUIActionBars"]
+    if type(abA) == "table" and type(abA.bars) == "table" and ns.ActionBars and type(out.actionBars) == "table" then
+        local okA, n = pcall(ns.ActionBars.ConvertEllesmere, abA, out.actionBars)
+        if not okA then return false, "Could not convert the action bars: " .. tostring(n) end
+        if n > 0 then
+            out.actionBars.enabled = true
+            what[#what + 1] = "action bars"
+            parts[#parts + 1] = { title = "Action bars", tbl = out.actionBars, on = true, path = { "actionBars" },
+                why = "off in Ellesmere", folder = "EllesmereUIActionBars", module = "EllesmereUI Action Bars" }
+        end
+    end
+
     -- font and outline (Ellesmere's Unit Frames font, else its global one)
     if not uf then return true, out, Unique(notes), what, parts end
 

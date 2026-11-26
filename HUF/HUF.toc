@@ -33,6 +33,8 @@ PlayerAuras.lua
 Chat.lua
 Bags.lua
 UIScale.lua
+ActionBars.lua
+ExtraBars.lua
 Windows.lua
 QuestLog.lua
 QuestLinks.lua
@@ -52,6 +54,7 @@ MinimapConfig.lua
 PlayerAurasConfig.lua
 ChatConfig.lua
 BagsConfig.lua
+ActionBarsConfig.lua
 QuestLogConfig.lua
 LootFeedConfig.lua
 TooltipsConfig.lua
