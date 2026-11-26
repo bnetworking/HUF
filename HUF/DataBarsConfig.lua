@@ -1,6 +1,5 @@
--- HUF: settings for the data bars. The minimap data bar is a tab of the
--- Minimap page (Utility Frames > Minimap > Data bar); the free bars and the blocks
--- on them are in its Advanced Settings window.
+-- HUF: settings for the data bars - their own page in the General list (General > Data
+-- Bars): the free bars anywhere on the screen, the blocks on them, and the minimap data bar.
 
 local _, ns = ...
 local UI = ns.UI
@@ -11,7 +10,7 @@ local COL_W, COL2_X = 330, 366
 local function D() return ns.db.dataBars.minimap end
 local function Opt(k) return function() return D()[k] end, function(v) D()[k] = v end end
 
-local TOP = -14
+local TOP = -36
 local function SubFrame(page)
     local f = CreateFrame("Frame", nil, page)
     f:SetPoint("TOPLEFT", 0, TOP - 16)
@@ -114,8 +113,7 @@ function ns.DataBarsTab(f)
     R:Slider("Space between them", 0, 40, 1, Opt("spacing"))
     R:Note("The tracking button sits on the bar's left end when Minimap > Icons > Tracking is at \"Below, left\".")
     R:Space(6)
-    R:Button("Advanced Settings", function() if ns.ShowDataBarsWindow then ns.ShowDataBarsWindow() end end)
-    R:Note("All data bars: free bars anywhere on the screen and their blocks (FPS, latency, clock, gold, durability, friends, guild, ...).")
+    R:Note("The other data bars (anywhere on the screen) and their blocks: the Bars and Blocks tabs.")
     -- everything here waits for the data bar switch
     UI.Gate(f, on, function() return D().enabled end)
 end
@@ -315,73 +313,29 @@ local function BlocksPage(f)
     end
 end
 
--- built in its own window (Minimap > Data bar > Advanced Settings), not in the list
-ns.RegisterPage("databars", "Data bars", "hidden", function(page)
-    local tabs = { { "bars", "Bars" }, { "blocks", "Blocks" } }
+ns.RegisterPage("databars", "Data Bars", "general", function(page)
+    local tabs = { { "bars", "Bars" }, { "blocks", "Blocks" }, { "minimap", "Minimap bar" } }
     local subs, strip = {}, nil
     local function Show(k)
         for n, sf in pairs(subs) do sf:SetShown(n == k) end
         strip:Select(k)
     end
     strip = UI.SubTabs(page, tabs, Show)
-    strip:SetPoint("TOPLEFT", 0, 0)
-    strip:SetPoint("TOPRIGHT", 0, 0)
+    strip:SetPoint("TOPLEFT", 0, -22)
+    strip:SetPoint("TOPRIGHT", 0, -22)
     subs.bars = SubFrame(page); BarsPage(subs.bars)
     subs.blocks = SubFrame(page); BlocksPage(subs.blocks)
+    subs.minimap = SubFrame(page); ns.DataBarsTab(subs.minimap)
     strip:Bind(subs, Show)
     Show("bars")
+    page.OpenTab = function(k) if subs[k] then Show(k) end end   -- ns.OpenConfigTab("databars", "minimap")
     page.OnRefresh = function() subs.blocks.ShowTypeOptions() end
     subs.blocks.ShowTypeOptions()
 end, function()
+    if ns.db.dataBars.minimap.enabled then return true end
     for _, b in ipairs(ns.db.dataBars.bars) do if b.enabled then return true end end
     return false
 end)
 
----------------------------------------------------------------------------
--- The Advanced Settings window (Minimap > Data bar)
----------------------------------------------------------------------------
-local win
-function ns.ShowDataBarsWindow()
-    if not win then
-        local A = UI.ACCENT
-        win = CreateFrame("Frame", "HUF_DataBarsSettings", UIParent)
-        win:SetSize(ns.PAGE_W + 24, ns.PAGE_H + 44)
-        win:SetPoint("CENTER", 0, 10)
-        win:SetFrameStrata("DIALOG")
-        win:SetToplevel(true)
-        win:SetClampedToScreen(true)
-        win:EnableMouse(true)
-        win:SetMovable(true)
-        win:RegisterForDrag("LeftButton")
-        win:SetScript("OnDragStart", win.StartMoving)
-        win:SetScript("OnDragStop", win.StopMovingOrSizing)
-        UI.Fill(win, 0.05, 0.05, 0.06, 0.97)
-        UI.Border(win, A[1], A[2], A[3], 0.9)
-        local title = UI.Label(win, "Data bars - Advanced Settings", "GameFontNormalLarge")
-        title:SetPoint("TOPLEFT", 12, -10)
-        title:SetTextColor(A[1], A[2], A[3])
-        local close = UI.Button(win, 22, "x", function() win:Hide() end)
-        close:SetPoint("TOPRIGHT", -6, -6)
-        local body = CreateFrame("Frame", nil, win)
-        body:SetPoint("TOPLEFT", 12, -38)
-        body:SetSize(ns.PAGE_W, ns.PAGE_H)
-        body.widgets = {}
-        local page = ns.configPages and ns.configPages.databars
-        if page then
-            local ok, err = pcall(page.build, body)
-            if not ok then ns.Log("config", "data bars window: %s", tostring(err)) end
-        end
-        -- greyed while the minimap data bar is off
-        UI.Gate(body, nil, function() return D().enabled end)
-        win.Refresh = function()
-            if body.OnRefresh then pcall(body.OnRefresh) end
-            for _, w in ipairs(body.widgets) do pcall(w.Refresh) end
-        end
-        win:SetScript("OnShow", win.Refresh)
-        ns.OnRefresh(function() if win:IsShown() then win.Refresh() end end)
-        UI.CloseOnEscape(win)
-        win:Hide()
-    end
-    win:Show()
-    win.Refresh()
-end
+-- the old Advanced Settings window: now the Data Bars page
+function ns.ShowDataBarsWindow() if ns.OpenConfigTab then ns.OpenConfigTab("databars", "bars") end end

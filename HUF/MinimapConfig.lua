@@ -243,7 +243,11 @@ ns.RegisterPage("minimap", "Minimap", "utility", function(page)
     subs.texts = SubFrame(page); TextsPage(subs.texts)
     subs.icons = SubFrame(page); IconsPage(subs.icons)
     subs.buttons = SubFrame(page); ButtonsPage(subs.buttons, page)
-    if ns.DataBarsTab then subs.databar = SubFrame(page); ns.DataBarsTab(subs.databar) end
+    -- the minimap data bar's settings are on the Data Bars page (General list), with the other data bars
+    subs.databar = SubFrame(page)
+    local DC = UI.Column(subs.databar, 0, 0, 330)
+    DC:Note("The minimap data bar is set up on the Data Bars page (General list), with every other data bar.")
+    DC:Button("Open the Data Bars page", function() ns.OpenConfigTab("databars", "minimap") end)
     if strip.Bind then strip:Bind(subs, Show) end
     Show("map")
 end, function() return ns.db.minimap.enabled end)
