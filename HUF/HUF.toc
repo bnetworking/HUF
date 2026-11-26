@@ -38,6 +38,7 @@ QuestLinks.lua
 LootFeed.lua
 Tooltips.lua
 Reminders.lua
+Resets.lua
 Movers.lua
 Config.lua
 Search.lua

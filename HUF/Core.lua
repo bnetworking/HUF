@@ -529,6 +529,7 @@ local function BuildDefaults()
             hideBlizzard = true,
             hideRaidManager = true,    -- Blizzard's raid / party manager on the left edge
             hideReminders = { talents = true, legacy = true, other = false }, -- the menu bar's yellow reminder boxes
+            gameMenuButton = true,      -- a HUF button below the game menu (Esc)
             snap = true, snapDistance = 8, snapGap = 0,   -- unlock mode: frames snap to each other (Alt: not)
             snapMiddle = true,                            -- unlock mode: lines through the screen's middle
             grid = false, gridSize = 32, gridAlpha = 0.12, -- unlock mode: a grid of squares (frames snap to it), its opacity
@@ -611,6 +612,8 @@ local function BuildDefaults()
             border = "ACCENT", borderColor = C(0.30, 0.30, 0.30),   -- ACCENT | CUSTOM
             point = { "BOTTOMRIGHT", "BOTTOMRIGHT", -40, 140 },      -- the fixed place
         },
+        -- instance resets (General > Frames & Features, Resets.lua): tell the group
+        resets = { announce = false },
         -- loot feed (General > Loot Feed): rows for what you gain, fading out
         lootFeed = {
             fastLoot = true,            -- take every slot when the loot window opens (Shift: the normal window)

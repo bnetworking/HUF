@@ -253,9 +253,12 @@ local function OnUpdate()
     local now, removed = GetTime(), false
     for i = #active, 1, -1 do
         local row = active[i]
-        if row.hover then row.expire = math.max(row.expire, now + 1) end
+        -- hovered, or an example row while frames are unlocked: it stays
+        if row.hover or (ns.unlocked and row.key and row.key:find("^sample:")) then
+            row.expire = math.max(row.expire, now + 1)
+        end
         local left = row.expire - now
-        if row.hover then
+        if row.hover or (ns.unlocked and row.key and row.key:find("^sample:")) then
             row:SetAlpha(1)
         elseif left <= 0 then
             local a = 1 + left / FADE_OUT

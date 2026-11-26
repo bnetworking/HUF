@@ -225,7 +225,7 @@ ns.RegisterPage("general", "General", "general", function(page)
     ns.BuildLootFeedTile(page, 0, LOOT_Y, TILE_W, H + LOOT_Y)
 
     -- Frames & Features -----------------------------------------------------
-    local FF_H = 200
+    local FF_H = 248
     local ff, F = Tile(page, X2, 0, TILE_W, FF_H, "Frames & Features", "Interface\\Icons\\INV_Misc_Gear_01")
     local gh, sh = Opt(G, "hideBlizzard")
     F:Check("Hide Blizzard's frames HUF replaces", gh, function(v)
@@ -274,6 +274,13 @@ ns.RegisterPage("general", "General", "general", function(page)
         rx = rx + cw[i]
     end
     F:Add(remRow, UI.ROW, 16)
+    -- instance resets (Resets.lua)
+    F:Check("Tell the group when I reset instances", function() return ns.db.resets.announce end,
+        function(v) ns.db.resets.announce = v end,
+        "After you reset instances, HUF says in group chat (instance, raid or party) which were reset, or which could not be and why (players still inside, offline or zoning in). Only the one who resets says it; nothing outside a group.")
+    F:Check("Button in the game menu (Esc)", function() return G().gameMenuButton ~= false end,
+        function(v) G().gameMenuButton = v if ns.RelayoutGameMenu then ns.RelayoutGameMenu() end end,
+        "A HUF button below the game menu (Esc) opens these settings.")
 
     -- Addon Support ---------------------------------------------------------
     local AS_Y = -(FF_H + TILE_GAP)

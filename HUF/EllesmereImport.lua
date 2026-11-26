@@ -1462,6 +1462,15 @@ local function Convert(prof, uf, np, npOn, dm, dmOn)
             why = "EllesmereUI Damage Meters is off", folder = DM_FOLDER, module = "EllesmereUI Damage Meters" }
     end
 
+    -- Ellesmere's instance reset announce (Quality of Life, kept outside its
+    -- profiles: ReadEllesmereLive passes it on) -> HUF's resets.announce
+    local ra = prof and (prof._hufResetAnnounce or prof.instanceResetAnnounce)
+    if ra == true and type(out.resets) == "table" then
+        out.resets.announce = true
+        what[#what + 1] = "instance reset announce"
+        parts[#parts + 1] = { title = "Instance reset announce", tbl = out.resets, on = true, path = { "resets" } }
+    end
+
     -- font and outline (Ellesmere's Unit Frames font, else its global one)
     if not uf then return true, out, Unique(notes), what, parts end
 
@@ -1575,6 +1584,7 @@ function ns.ReadEllesmereLive()
     if not okS or type(data) ~= "table" then return false, "Could not read EllesmereUI's settings: " .. tostring(data) end
     data.addons = type(data.addons) == "table" and data.addons or {}
     local db = _G.EllesmereUIDB
+    if type(db) == "table" then data._hufResetAnnounce = db.instanceResetAnnounce end
     local stored = type(db) == "table" and type(db.profiles) == "table" and db.profiles[db.activeProfile or "Default"]
     local saved = type(stored) == "table" and type(stored.addons) == "table" and stored.addons or {}
     -- only loaded modules are in the snapshot: from the stored copy = Ellesmere has them off

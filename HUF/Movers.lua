@@ -280,10 +280,344 @@ local function FakeMember(i) return Person(i) end
 
 local previews = {}
 
+---------------------------------------------------------------------------
+-- Resize grips (unlock window: "Resize grips", global.resizeGrips, default
+-- on): a small square on each corner of a box, shown while the mouse is on
+-- the box. Dragging one changes the frame's own width / height settings
+-- live (the same the sliders change); the opposite corner stays where it
+-- is (the frame's place is moved by as much as its anchor would shift it).
+-- A handle (also the size / position window's, below):
+--   sizer = { get() -> w, h, set(w, h), done(), step() }   in the frame's units
+--   scaler = { get() -> v, set(v) }   optional: Shift + drag scales instead - v is multiplied by
+--            how much the box grew (set clamps and rounds it the frame's own way)
+--   point()      its place (offsets [3] / [4] in the frame's units)
+--   relayout()   put it where its settings say (live, cheap)
+--   unit()       the frame's effective scale (screen pixels per unit)
+--   box          the frame whose corners count
+---------------------------------------------------------------------------
+local gripSets = {}
+local function GripsOn() return ns.db.global.resizeGrips ~= false end
+local function Clamp(v, lo, hi) return math.max(lo, math.min(hi, math.floor(v + 0.5))) end
+local CORNERS = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
+local OPPOSITE = { TOPLEFT = "BOTTOMRIGHT", TOPRIGHT = "BOTTOMLEFT", BOTTOMLEFT = "TOPRIGHT", BOTTOMRIGHT = "TOPLEFT" }
+-- a corner of a frame in screen pixels
+local function CornerXY(f, corner)
+    if not f then return nil end
+    local l, b, r, t = f:GetLeft(), f:GetBottom(), f:GetRight(), f:GetTop()
+    if not l then return nil end
+    local s = f:GetEffectiveScale()
+    return (corner:find("LEFT") and l or r) * s, (corner:find("TOP") and t or b) * s
+end
+-- after a size change: move the place so `corner` is back at fx, fy
+local function KeepCorner(h, corner, fx, fy)
+    if not (h.point and h.box and fx) then return end
+    local nx, ny = CornerXY(h.box, corner)
+    if not nx then return end
+    local u = h.unit()
+    local dx, dy = (fx - nx) / u, (fy - ny) / u
+    if math.abs(dx) < 0.01 and math.abs(dy) < 0.01 then return end
+    local p = h.point()
+    p[3], p[4] = (p[3] or 0) + dx, (p[4] or 0) + dy
+    pcall(h.relayout)
+end
+local function RoundPoint(h)
+    if not h.point then return end
+    local p = h.point()
+    p[3], p[4] = math.floor((p[3] or 0) + 0.5), math.floor((p[4] or 0) + 0.5)
+end
+-- resize keeping one corner still (the grips, the size / position window)
+local function ResizeKeeping(h, w, hh, corner, fx, fy)
+    local ok, err = pcall(h.sizer.set, w, hh)
+    if not ok then ns.Log("move", "resize: %s", tostring(err)) return end
+    KeepCorner(h, corner, fx, fy)
+end
+
+local function GripSetShown(gs)
+    local show = GripsOn() and ns.unlocked and (not gs.wanted or gs.wanted()) and gs.hover:IsShown()
+    if show and not gs.dragging then
+        local over = gs.hover:IsMouseOver(8, -8, -8, 8)
+        if not over then
+            for _, g in ipairs(gs.grips) do if g:IsShown() and g:IsMouseOver() then over = true end end
+        end
+        show = over
+    end
+    for _, g in ipairs(gs.grips) do g:SetShown(show and true or false) end
+end
+local function GripSetLater(gs) C_Timer.After(0.08, function() GripSetShown(gs) end) end
+
+-- four corner grips on `parent` (placed on its corners), shown while the
+-- mouse is on `hover`; handle as above; wanted(): false = no grips
+local function AddGrips(parent, hover, handle, wanted)
+    local gs = { grips = {}, hover = hover, wanted = wanted }
+    for _, corner in ipairs(CORNERS) do
+        local g = CreateFrame("Button", nil, parent)
+        g:SetSize(10, 10)
+        g:SetPoint("CENTER", parent, corner, 0, 0)
+        g:SetFrameLevel(parent:GetFrameLevel() + 20)
+        UI.Fill(g, 0, 0, 0, 0.9)
+        local dot = g:CreateTexture(nil, "ARTWORK")
+        dot:SetPoint("TOPLEFT", 1, -1)
+        dot:SetPoint("BOTTOMRIGHT", -1, 1)
+        dot:SetColorTexture(A[1], A[2], A[3], 1)
+        local hl = g:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints(dot)
+        hl:SetColorTexture(1, 1, 1, 0.5)
+        local sx = corner:find("RIGHT") and 1 or -1
+        local sy = corner:find("TOP") and 1 or -1
+        local fixed = OPPOSITE[corner]
+        g:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Drag to resize")
+            local h = type(handle) == "function" and handle() or handle
+            if h and h.scaler then GameTooltip:AddLine("Shift + drag: scale", 0.8, 0.8, 0.8) end
+            GameTooltip:Show()
+        end)
+        g:SetScript("OnLeave", function() GameTooltip:Hide() GripSetLater(gs) end)
+        g:SetScript("OnMouseDown", function(self, button)
+            if button ~= "LeftButton" or InCombatLockdown() then return end
+            local h = type(handle) == "function" and handle() or handle
+            if not (h and h.sizer) then return end
+            local w, hh = h.sizer.get()
+            if not (w and hh) then return end
+            local x, y = GetCursorPosition()
+            local fx, fy = CornerXY(h.box, fixed)
+            self.drag = { h = h, x = x, y = y, w = w, hh = hh, fx = fx, fy = fy, u = h.unit() }
+            -- Shift held at the start: scale (the frame's scaler) instead of resizing
+            if IsShiftKeyDown() and h.scaler then
+                local ok, v = pcall(h.scaler.get)
+                if ok and type(v) == "number" then self.drag.scale = v end
+            end
+            gs.dragging = true
+            if Movers.Select then Movers.Select(h) end
+            self.wait = 0
+            self:SetScript("OnUpdate", function(s, dt)
+                s.wait = s.wait - dt
+                if s.wait > 0 then return end
+                s.wait = 0.03
+                local d = s.drag
+                local cx, cy = GetCursorPosition()
+                local nw = math.floor(d.w + sx * (cx - d.x) / d.u + 0.5)
+                local nh = math.floor(d.hh + sy * (cy - d.y) / d.u + 0.5)
+                if nw ~= s.lastW or nh ~= s.lastH then
+                    s.lastW, s.lastH = nw, nh
+                    if d.scale then
+                        -- the side dragged more decides how much it grew
+                        local fw, fh = nw / math.max(1, d.w), nh / math.max(1, d.hh)
+                        local f = math.abs(fw - 1) >= math.abs(fh - 1) and fw or fh
+                        local ok, err = pcall(d.h.scaler.set, d.scale * math.max(0.05, f))
+                        if not ok then ns.Log("move", "scale: %s", tostring(err)) end
+                        KeepCorner(d.h, fixed, d.fx, d.fy)
+                    else
+                        ResizeKeeping(d.h, nw, nh, fixed, d.fx, d.fy)
+                    end
+                    if Movers.EditRefresh then Movers.EditRefresh() end
+                end
+            end)
+        end)
+        g:SetScript("OnMouseUp", function(self)
+            self:SetScript("OnUpdate", nil)
+            local d = self.drag
+            self.drag, self.lastW, self.lastH = nil, nil, nil
+            gs.dragging = false
+            if d then
+                RoundPoint(d.h)
+                pcall(d.h.relayout)
+                if d.h.sizer.done then pcall(d.h.sizer.done) end
+                if Movers.EditRefresh then Movers.EditRefresh() end
+            end
+            GripSetLater(gs)
+        end)
+        g:Hide()
+        gs.grips[#gs.grips + 1] = g
+    end
+    hover:HookScript("OnEnter", function() GripSetShown(gs) end)
+    hover:HookScript("OnLeave", function() GripSetLater(gs) end)
+    gripSets[#gripSets + 1] = gs
+    return gs
+end
+Movers.AddGrips = AddGrips   -- boxes of their own (the buff / debuff bars) get grips too
+
+function Movers.ShowGrips()
+    for _, gs in ipairs(gripSets) do GripSetShown(gs) end
+end
+
+---------------------------------------------------------------------------
+-- Size and position window (unlock window: "Size / position window on
+-- click", global.moverEdit, default on): a click on a box selects it; a
+-- small window below the screen's middle shows its X / Y (its place's
+-- offsets) and W / H, with arrow buttons (Shift: 10) and typed values.
+-- Arrow keys move the selected box, Ctrl + arrows resize it, Esc lets go.
+-- A handle: { label, point() (the place table, offsets [3] / [4]) or
+--   frame() (another addon's window), moved(frame), sizer = { get() -> w, h,
+--   set(w, h), done(), step() -> stepW, stepH } (optional) }
+---------------------------------------------------------------------------
+local edit, sel
+local function EditOn() return ns.db.global.moverEdit ~= false end
+local function Pos()
+    if not sel then return nil end
+    if sel.point then
+        local p = sel.point()
+        return math.floor((p[3] or 0) + 0.5), math.floor((p[4] or 0) + 0.5)
+    end
+    local f = sel.frame and sel.frame()
+    if f and f:GetLeft() then return math.floor(f:GetLeft() + 0.5), math.floor(f:GetBottom() + 0.5) end
+    return nil
+end
+local function Move(dx, dy)
+    if not sel or InCombatLockdown() then return end
+    if sel.point then
+        local p = sel.point()
+        p[3] = math.floor((p[3] or 0) + dx + 0.5)
+        p[4] = math.floor((p[4] or 0) + dy + 0.5)
+        pcall(sel.moved)
+    elseif sel.frame then
+        local f = sel.frame()
+        if not (f and f:GetLeft()) then return end
+        local l, b = f:GetLeft() + dx, f:GetBottom() + dy
+        f:ClearAllPoints()
+        f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l, b)
+        pcall(sel.moved, f)
+    end
+    Movers.EditRefresh()
+end
+local function Resize(dw, dh, absW, absH)
+    local z = sel and sel.sizer
+    if not z or InCombatLockdown() then return end
+    local w, h = z.get()
+    if not (w and h) then return end
+    local sw, sh = 1, 1
+    if z.step then sw, sh = z.step() end
+    w = absW or (w + dw * sw)
+    h = absH or (h + dh * sh)
+    -- the top-left corner stays where it is
+    local fx, fy = CornerXY(sel.box, "TOPLEFT")
+    ResizeKeeping(sel, w, h, "TOPLEFT", fx, fy)
+    RoundPoint(sel)
+    if sel.relayout then pcall(sel.relayout) end
+    if z.done then pcall(z.done) end
+    Movers.EditRefresh()
+end
+local function EditWin()
+    if edit then return edit end
+    local p = CreateFrame("Frame", "HUF_MoverEdit", UIParent)
+    p:SetSize(236, 158)
+    p:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
+    p:SetFrameStrata("FULLSCREEN_DIALOG")
+    p:SetMovable(true)
+    p:SetClampedToScreen(true)
+    p:EnableMouse(true)
+    p:RegisterForDrag("LeftButton")
+    p:SetScript("OnDragStart", p.StartMoving)
+    p:SetScript("OnDragStop", p.StopMovingOrSizing)
+    UI.Fill(p, 0.05, 0.05, 0.06, 0.95)
+    UI.Border(p, A[1], A[2], A[3], 0.9)
+    p.title = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    p.title:SetPoint("TOPLEFT", 10, -8)
+    p.title:SetPoint("TOPRIGHT", -28, -8)
+    p.title:SetJustifyH("LEFT")
+    p.title:SetWordWrap(false)
+    local close = UI.Button(p, 20, "x", function() Movers.Select(nil) end)
+    close:SetPoint("TOPRIGHT", -6, -5)
+    p.rows = {}
+    local ROWS = {
+        { "X", "pos", 1, 0 }, { "Y", "pos", 0, 1 },
+        { "W", "size", 1, 0 }, { "H", "size", 0, 1 },
+    }
+    for i, r in ipairs(ROWS) do
+        local y = -32 - (i - 1) * 25
+        local row = CreateFrame("Frame", nil, p)
+        row:SetSize(216, 22)
+        row:SetPoint("TOPLEFT", 10, y)
+        local lab = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lab:SetPoint("LEFT", 0, 0)
+        lab:SetText(r[1])
+        local function Step(d)
+            local n = IsShiftKeyDown() and 10 or 1
+            if r[2] == "pos" then Move(r[3] * d * n, r[4] * d * n)
+            else Resize(r[3] * d * n, r[4] * d * n) end
+        end
+        local less = UI.Button(row, 26, "<", function() Step(-1) end)
+        less:SetPoint("LEFT", 22, 0)
+        local box = CreateFrame("EditBox", nil, row)
+        box:SetSize(90, 20)
+        box:SetPoint("LEFT", less, "RIGHT", 6, 0)
+        box:SetAutoFocus(false)
+        box:SetFontObject("GameFontHighlight")
+        box:SetJustifyH("CENTER")
+        UI.Fill(box, 0.12, 0.12, 0.12, 1)
+        UI.Border(box, 0.35, 0.35, 0.35, 1)
+        box:SetScript("OnEnterPressed", function(self)
+            local v = tonumber(self:GetText())
+            self:ClearFocus()
+            if not v then Movers.EditRefresh() return end
+            if r[2] == "pos" then
+                local x, yy = Pos()
+                if x then Move(r[3] == 1 and (v - x) or 0, r[4] == 1 and (v - yy) or 0) end
+            else
+                Resize(0, 0, r[3] == 1 and v or nil, r[4] == 1 and v or nil)
+            end
+        end)
+        box:SetScript("OnEscapePressed", function(self) self:ClearFocus() Movers.EditRefresh() end)
+        local more = UI.Button(row, 26, ">", function() Step(1) end)
+        more:SetPoint("LEFT", box, "RIGHT", 6, 0)
+        row.box, row.kind, row.axis = box, r[2], r[3] == 1 and 1 or 2
+        p.rows[i] = row
+    end
+    local note = p:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    note:SetPoint("BOTTOMLEFT", 10, 8)
+    note:SetPoint("BOTTOMRIGHT", -10, 8)
+    note:SetJustifyH("LEFT")
+    note:SetText("Arrow keys move, Ctrl + arrows resize, Shift: 10 at a time, Esc: done.")
+    -- the arrow keys while a box is selected (others go on to the game)
+    local ARROW = { UP = { 0, 1 }, DOWN = { 0, -1 }, LEFT = { -1, 0 }, RIGHT = { 1, 0 } }
+    p:EnableKeyboard(true)
+    p:SetPropagateKeyboardInput(true)
+    p:SetScript("OnKeyDown", function(self, key)
+        if InCombatLockdown() then return end
+        local a = ARROW[key]
+        if sel and (a or key == "ESCAPE") then
+            self:SetPropagateKeyboardInput(false)
+            if key == "ESCAPE" then Movers.Select(nil) return end
+            local n = IsShiftKeyDown() and 10 or 1
+            if IsControlKeyDown() then Resize(a[1] * n, a[2] * n) else Move(a[1] * n, a[2] * n) end
+        else
+            self:SetPropagateKeyboardInput(true)
+        end
+    end)
+    p:Hide()
+    edit = p
+    return p
+end
+function Movers.EditRefresh()
+    if not (edit and edit:IsShown() and sel) then return end
+    edit.title:SetText(sel.label or "")
+    local x, y = Pos()
+    local w, h
+    if sel.sizer then w, h = sel.sizer.get() end
+    for _, row in ipairs(edit.rows) do
+        local v
+        if row.kind == "pos" then v = row.axis == 1 and x or y
+        else v = row.axis == 1 and w or h end
+        if not row.box:HasFocus() then row.box:SetText(v and tostring(math.floor(v + 0.5)) or "-") end
+        row:SetAlpha(v and 1 or 0.4)
+    end
+end
+function Movers.Select(handle)
+    sel = handle
+    if not (handle and ns.unlocked and EditOn()) then
+        if edit then edit:Hide() end
+        sel = nil
+        return
+    end
+    EditWin():Show()
+    Movers.EditRefresh()
+end
+
 -- dragging: the frame keeps its anchor (screen or another frame); only the
 -- offsets change by how far it was moved
 local function DragStart(self)
     if InCombatLockdown() then ns.Print("Frames can't be moved in combat.") return end
+    if self.handle and Movers.Select then Movers.Select(self.handle) end
     self.dragFrom = { self:GetLeft() or 0, self:GetTop() or 0 }
     Snap.StartDrag(self)
 end
@@ -299,9 +633,11 @@ local function DragStop(self, key)
     p[4] = math.floor((p[4] or 0) + dy + 0.5)
     ns.Log("move", "%s moved by %d,%d to %s %s %s,%s", key, dx, dy, p[1], p[2], p[3], p[4])
     ns.Refresh(true)
+    Movers.EditRefresh()
 end
 
 local function Lookup(k) return previews[k] end
+local Layout    -- below (the grips call it)
 
 local function Preview(key)
     if previews[key] then return previews[key] end
@@ -324,16 +660,40 @@ local function Preview(key)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", DragStart)
     f:SetScript("OnDragStop", function(self) DragStop(self, key) end)
-    f:RegisterForClicks("RightButtonUp")
-    f:SetScript("OnClick", function(_, button)
+    -- size: the frame's width / height (its sliders: 60 - 400, 10 - 80)
+    f.sizer = {
+        get = function() local s = ns.db.units[key] return s.width, s.height end,
+        set = function(w, h)
+            local s = ns.db.units[key]
+            s.width, s.height = Clamp(w, 60, 400), Clamp(h, 10, 80)
+            Layout(key)
+        end,
+        done = function() ns.Refresh(true) end,
+    }
+    f.handle = { label = f.previewTitle, sizer = f.sizer, box = f,
+        point = function() return ns.db.units[key].point end, moved = function() ns.Refresh(true) end,
+        relayout = function() Layout(key) end, unit = function() return f:GetEffectiveScale() end,
+        -- Shift + drag: the frame's scale (its Scale slider: 0.5 - 2)
+        scaler = {
+            get = function() return ns.db.units[key].scale or 1 end,
+            set = function(v)
+                ns.db.units[key].scale = math.floor(math.max(0.5, math.min(2, v)) * 100 + 0.5) / 100
+                Layout(key)
+            end,
+        } }
+    f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    f:SetScript("OnClick", function(self, button)
+        if button == "LeftButton" then Movers.Select(self.handle) return end
         if button == "RightButton" and ns.ToggleConfig then ns.ToggleConfig(key, true) end
     end)
+    -- the corner grips (on the box, which stands 4 out on each side)
+    AddGrips(f.box, f, f.handle)
     previews[key] = f
     Snap.Register(f)
     return f
 end
 
-local function Layout(key)
+function Layout(key)
     local s = ns.db.units[key]
     local f = Preview(key)
     f.s = s
@@ -352,6 +712,7 @@ end
 -- Group preview: a box with 5 made-up members, laid out like the header does
 ---------------------------------------------------------------------------
 local group
+local LayoutGroup    -- below (the grip calls it)
 local function GroupPreview()
     if group then return group end
     local box = CreateFrame("Button", nil, UIParent)
@@ -360,10 +721,13 @@ local function GroupPreview()
     box:SetClampedToScreen(true)
     box:EnableMouse(true)
     box:RegisterForDrag("LeftButton")
-    box:RegisterForClicks("RightButtonUp")
+    box:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     box:SetScript("OnDragStart", DragStart)
     box:SetScript("OnDragStop", function(self) DragStop(self, "party") end)
-    box:SetScript("OnClick", function() if ns.ToggleConfig then ns.ToggleConfig("party", true) end end)
+    box:SetScript("OnClick", function(self, button)
+        if button == "LeftButton" then Movers.Select(self.handle) return end
+        if ns.ToggleConfig then ns.ToggleConfig("party", true) end
+    end)
     box.fill = UI.Fill(box, A[1], A[2], A[3], 0.10)
     box.border = UI.Border(box, A[1], A[2], A[3], 0.8)
     box.label = box:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -377,12 +741,47 @@ local function GroupPreview()
         f:EnableMouse(false)
         box.members[i] = f
     end
+    -- size: the box's size spread over the members (each member's width / height)
+    local function Shape()
+        local o = ns.db.units.party.group
+        return o.showPlayer and 5 or 4, ns.Group.Spacing(o), ns.Group.Growth(o).dx == 0
+    end
+    box.sizer = {
+        get = function() return box:GetWidth(), box:GetHeight() end,
+        set = function(w, h)
+            local s = ns.db.units.party
+            local n, sp, vertical = Shape()
+            if vertical then
+                s.width, s.height = Clamp(w, 60, 400), Clamp((h - (n - 1) * sp) / n, 10, 80)
+            else
+                s.width, s.height = Clamp((w - (n - 1) * sp) / n, 60, 400), Clamp(h, 10, 80)
+            end
+            LayoutGroup()
+        end,
+        done = function() ns.Refresh(true) end,
+        step = function()
+            local n, _, vertical = Shape()
+            if vertical then return 1, n end
+            return n, 1
+        end,
+    }
+    box.handle = { label = "Group", sizer = box.sizer, box = box,
+        point = function() return ns.db.units.party.point end, moved = function() ns.Refresh(true) end,
+        relayout = function() LayoutGroup() end, unit = function() return box:GetEffectiveScale() end,
+        scaler = {   -- Shift + drag: the group's scale
+            get = function() return ns.db.units.party.scale or 1 end,
+            set = function(v)
+                ns.db.units.party.scale = math.floor(math.max(0.5, math.min(2, v)) * 100 + 0.5) / 100
+                LayoutGroup()
+            end,
+        } }
+    AddGrips(box, box, box.handle)
     group = box
     Snap.Register(box)
     return box
 end
 
-local function LayoutGroup()
+function LayoutGroup()
     local s = ns.db.units.party
     local box = GroupPreview()
     local o = s.group
@@ -436,9 +835,19 @@ local boxes = {}
 --       save = function(frame) end,  -- after a drop: the frame already stands where it was
 --                                    -- dropped (BOTTOMLEFT to UIParent); store its place your way
 --       shown = function() return true end,  -- optional: a box only while true (default: frame:IsShown())
+--       preview = function(on) end,          -- optional: unlock mode starts / ends (show example
+--                                            -- content, so the window is seen as it will look)
 --       settings = function() end,           -- optional: right-click on the box
 --       get = function() return place end,   -- optional, with set: the window's place (any table),
 --       set = function(place) end,           -- carried in HUF's profile export / import
+--       resize = {                           -- optional: corner grips and the size window
+--           get = function() return w, h end,        -- its size (in the window's own units)
+--           set = function(w, h) end,                -- a new size (the opposite corner stays put)
+--           done = function() end,                   -- optional: the drag / typing ended
+--           step = function() return 1, 1 end,       -- optional: snap the size to steps
+--           scale = { get = function() return v end, set = function(v) end },
+--                                                    -- optional: Shift + drag (v x how much it grew)
+--       },
 --   })
 --   HUF.UnregisterMover(id)
 Movers.external = {}
@@ -452,7 +861,9 @@ function ns.RegisterMover(id, spec)
     local getFrame = type(fr) == "function" and fr or function() return fr end
     Movers.external[id] = {
         external = true, label = tostring(spec.label or id), save = spec.save, settings = spec.settings,
-        get = spec.get, set = spec.set,
+        get = spec.get, set = spec.set, preview = spec.preview,
+        resize = type(spec.resize) == "table" and type(spec.resize.get) == "function" and type(spec.resize.set) == "function"
+            and spec.resize or nil,
         frame = getFrame,
         on = function()
             local f = getFrame()
@@ -506,13 +917,14 @@ local function Box(id, spec)
         m:SetClampedToScreen(true)
         m:EnableMouse(true)
         m:RegisterForDrag("LeftButton")
-        m:RegisterForClicks("RightButtonUp")
+        m:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         UI.Fill(m, A[1], A[2], A[3], 0.15)
         UI.Border(m, A[1], A[2], A[3], 0.8)
         m.label = m:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         m.label:SetPoint("CENTER")
         m:SetScript("OnDragStart", function(self)
             if InCombatLockdown() then return end
+            Movers.Select(self.handle)
             self.from = { self:GetLeft() or 0, self:GetTop() or 0 }
             Snap.StartDrag(self)
         end)
@@ -533,7 +945,7 @@ local function Box(id, spec)
                     local ok, err = pcall(sp.save, f)
                     if not ok then ns.Print("Moving %s: %s", sp.label, tostring(err)) end
                 end
-                C_Timer.After(0, function() Movers.PlaceBox(id) end)
+                C_Timer.After(0, function() Movers.PlaceBox(id) Movers.EditRefresh() end)
                 return
             end
             local k = sp.scale and sp.scale() or 1
@@ -541,18 +953,58 @@ local function Box(id, spec)
             p[3] = math.floor((p[3] or 0) + ((self:GetLeft() or 0) - from[1]) / k + 0.5)
             p[4] = math.floor((p[4] or 0) + ((self:GetTop() or 0) - from[2]) / k + 0.5)
             if sp.apply then pcall(sp.apply) end
-            C_Timer.After(0, function() Movers.PlaceBox(id) end)
+            C_Timer.After(0, function() Movers.PlaceBox(id) Movers.EditRefresh() end)
         end)
-        m:SetScript("OnClick", function(self)
+        m:SetScript("OnClick", function(self, button)
+            if button == "LeftButton" then Movers.Select(self.handle) return end
             local sp = self.spec
             if sp.settings then pcall(sp.settings) return end
             if ns.ToggleConfig and sp.page then ns.ToggleConfig(sp.page, true) end
         end)
         Snap.Register(m)
         boxes[id] = m
+        -- the grip (spec.resize = { get() -> w, h, set(w, h), done() } in the window's own units)
+        local function K()
+            local sp = m.spec
+            return sp.scale and sp.scale() or 1
+        end
+        -- the size / position window's handle (in the window's own units)
+        m.sizerObj = {
+                get = function() local r = m.spec.resize if r then return r.get() end end,
+                set = function(w, h) local r = m.spec.resize if r then r.set(w, h) Movers.PlaceBox(id) end end,
+                done = function() local r = m.spec.resize if r and r.done then r.done() end Movers.PlaceBox(id) end,
+                step = function() local r = m.spec.resize if r and r.step then return r.step() end return 1, 1 end,
+        }
+        m.handle = {
+            box = m,
+            unit = function() return m:GetEffectiveScale() * K() end,
+            relayout = function()
+                local sp = m.spec
+                if sp.apply and not sp.external then pcall(sp.apply) end
+                Movers.PlaceBox(id)
+            end,
+            moved = function(f)
+                local sp = m.spec
+                if sp.external then
+                    if f then pcall(sp.save, f) end
+                elseif sp.apply then
+                    pcall(sp.apply)
+                end
+                Movers.PlaceBox(id)
+            end,
+        }
     end
     m.spec = spec
     m.label:SetText(spec.label)
+    m.handle.label = spec.label
+    m.handle.point = (not spec.external) and spec.point or nil
+    m.handle.frame = spec.external and spec.frame or nil
+    m.handle.sizer = spec.resize and m.sizerObj or nil
+    m.handle.scaler = spec.resize and type(spec.resize.scale) == "table" and spec.resize.scale or nil
+    if not m.gripSet then
+        m.gripSet = AddGrips(m, m, m.handle, function() return m.spec and m.spec.resize ~= nil end)
+    end
+    GripSetShown(m.gripSet)
     return m
 end
 -- the windows that get a box (built when unlock mode opens: the modules load later)
@@ -611,7 +1063,20 @@ local function BoxSpecs()
                 local n = math.max(1, c().maxRows)
                 return c().width, n * c().height + (n - 1) * (c().spacing or 2)
             end,
-            apply = LF.Place }
+            apply = LF.Place,
+            -- the grip: width, and the row height (the box is every row)
+            resize = {
+                get = function()
+                    local n = math.max(1, c().maxRows)
+                    return c().width, n * c().height + (n - 1) * (c().spacing or 2)
+                end,
+                set = function(w, h)
+                    local n, sp = math.max(1, c().maxRows), c().spacing or 2
+                    c().width, c().height = Clamp(w, 100, 800), Clamp((h - (n - 1) * sp) / n, 14, 80)
+                    LF.Apply()
+                end,
+                step = function() return 1, math.max(1, c().maxRows) end,
+            } }
     end
     local DM = ns.DamageMeter
     if DM and DM.Windows and ns.db.damageMeter then
@@ -630,7 +1095,34 @@ local function BoxSpecs()
                         local ok, err = pcall(DM.LayoutWindows, w)
                         if not ok then ns.Print("Damage meter layout after moving: %s", tostring(err)) end
                     end
-                end }
+                end,
+                -- the grip: this window's own width, and its height in whole rows
+                -- (its own rows); row and title height its own or the shared ones
+                resize = {
+                    get = function() return w:GetWidth(), w:GetHeight() end,
+                    set = function(nw, nh)
+                        local c = ns.db.damageMeter
+                        local function V(k, d)
+                            local v = w.cfg[k]
+                            if v == nil then v = c[k] end
+                            return tonumber(v) or d
+                        end
+                        local step = V("rowHeight", 18) + V("rowGap", 1)
+                        local base = V("titleHeight", 20) + 2
+                        w.cfg.width = Clamp(nw, 120, 500)
+                        w.cfg.rows = Clamp((nh - base) / step, 1, 40)
+                        if DM.LayoutWindows then
+                            for _, other in ipairs(DM.Windows()) do pcall(DM.LayoutWindows, other) end
+                        end
+                    end,
+                    done = function() ns.Refresh() end,
+                    step = function()
+                        local c = ns.db.damageMeter
+                        local rh = w.cfg.rowHeight ~= nil and w.cfg.rowHeight or c.rowHeight
+                        local rg = w.cfg.rowGap ~= nil and w.cfg.rowGap or c.rowGap
+                        return 1, (tonumber(rh) or 18) + (tonumber(rg) or 1)
+                    end,
+                } }
         end
     end
     for id, sp in pairs(Movers.external) do list[id] = sp end
@@ -669,9 +1161,19 @@ function Movers.SetUnlocked(on)
     ns.Log("move", "unlock mode %s", ns.unlocked and "on" or "off")
     if ns.Raid then pcall(ns.Raid.SetUnlocked, ns.unlocked) end   -- example bars first: the boxes cover them
     if ns.DamageMeter and ns.db.damageMeter.enabled then pcall(ns.DamageMeter.Apply) end   -- hidden threat windows show for moving
+    -- other addons' windows: their example content first (the boxes take its size)
+    for id, sp in pairs(Movers.external) do
+        if type(sp.preview) == "function" then
+            local ok, err = pcall(sp.preview, ns.unlocked)
+            if not ok then ns.Log("move", "%s preview: %s", id, tostring(err)) end
+        end
+    end
+    -- the loot feed: its example rows (they stay while unlocked)
+    if ns.unlocked and ns.LootFeed and ns.LootFeed.ShowExamples then pcall(ns.LootFeed.ShowExamples) end
     if ns.unlocked then
         Movers.LayoutAll()
     else
+        Movers.Select(nil)
         for _, f in pairs(previews) do f:Hide() end
         if group then group:Hide() end
         LayoutBoxes()
@@ -699,7 +1201,7 @@ local function G() return ns.db.global end
 local function UnlockPanel()
     if panel then return panel end
     local p = CreateFrame("Frame", "HUF_UnlockPanel", UIParent)
-    p:SetSize(280, 344)
+    p:SetSize(280, 396)
     p:SetPoint("TOP", UIParent, "TOP", 0, -60)
     p:SetFrameStrata("FULLSCREEN_DIALOG")
     p:SetMovable(true)
@@ -742,6 +1244,14 @@ local function UnlockPanel()
     p.gridAlpha = Add(UI.Slider(p, 260, "Grid opacity", 0.02, 0.6, 0.02,
         function() return G().gridAlpha or 0.12 end,
         function(v) G().gridAlpha = v Snap.ShowGrid(ns.unlocked) end, "%.2f"), 40)
+    p.grips = Add(UI.Check(p, 260, "Resize grips (drag a box's corner)",
+        function() return G().resizeGrips ~= false end,
+        function(v) G().resizeGrips = v Movers.ShowGrips() end,
+        "An arrow in the bottom-right corner of the unit frames, the group, the loot feed and the damage meter windows: drag it to change their width and height (the same settings as their sliders)."), UI.ROW + 2)
+    p.edit = Add(UI.Check(p, 260, "Size / position window on click",
+        function() return G().moverEdit ~= false end,
+        function(v) G().moverEdit = v if not v then Movers.Select(nil) end end,
+        "A click on a box opens a small window with its X / Y and width / height: arrow buttons (Shift: 10), typed values, the arrow keys (Ctrl: resize)."), UI.ROW + 2)
     local lock = UI.Button(p, 125, "Lock", function() Movers.SetUnlocked(false) end)
     lock:SetPoint("BOTTOMLEFT", 10, 10)
     local open = UI.Button(p, 125, "Settings", function()
@@ -759,7 +1269,7 @@ function Movers.UnlockPanel(on)
         settingsWereOpen = ns.ConfigShown and ns.ConfigShown() or false
         if settingsWereOpen and ns.HideConfig then ns.HideConfig() end
         local p = UnlockPanel()
-        for _, k in ipairs({ "snap", "mid", "dist", "grid", "gridSize", "gridAlpha" }) do
+        for _, k in ipairs({ "snap", "mid", "dist", "grid", "gridSize", "gridAlpha", "grips", "edit" }) do
             if p[k] and p[k].Refresh then p[k].Refresh() end
         end
         p:Show()

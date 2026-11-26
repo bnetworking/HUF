@@ -294,6 +294,35 @@ function PA.NewMover(kind)
     m:Hide()
     movers[kind] = m
     if ns.Snap then ns.Snap.Register(m) end
+    -- unlock mode's corner grips: dragging sets how many icons fit across and down (columns /
+    -- rows); Shift + drag: the icon size
+    if ns.Movers and ns.Movers.AddGrips then
+        ns.Movers.AddGrips(m, m, {
+            box = m,
+            unit = function() return m:GetEffectiveScale() end,
+            point = function() return S(kind).point end,
+            relayout = function() PA.Apply() end,
+            sizer = {
+                get = function() local g = Geometry(S(kind)) return g.w, g.h end,
+                set = function(w, h)
+                    local s = S(kind)
+                    local extra = (s.timer and s.timerPos == "BELOW") and (s.timerSize + 2) or 0
+                    local across = math.max(1, math.min(40, math.floor((w + s.padding) / (s.size + s.padding) + 0.5)))
+                    local down = math.max(1, math.min(10, math.floor((h + s.padding) / (s.size + s.padding + extra) + 0.5)))
+                    -- the width holds the columns and the height the rows, whichever way the icons flow
+                    s.columns, s.rows = across, down
+                    PA.Apply()
+                end,
+            },
+            scaler = {
+                get = function() return S(kind).size end,
+                set = function(v)
+                    S(kind).size = math.max(12, math.min(64, math.floor(v + 0.5)))
+                    PA.Apply()
+                end,
+            },
+        })
+    end
     return m
 end
 
@@ -620,11 +649,114 @@ function PA.Apply()
     if not (HUFDB and ns.db) then return end
     ApplyBar("buffs")
     ApplyBar("debuffs")
+    if ns.unlocked then PA.SetUnlocked(true) end   -- the examples follow a change
     if ns.Units and ns.Units.HideBlizzardBars then ns.Units.HideBlizzardBars() end
+end
+
+---------------------------------------------------------------------------
+-- Unlock mode: made-up auras where the bar is, in its look and layout (the
+-- real icons are hidden meanwhile). Not clickable, no tooltips.
+-- { icon, stacks, duration (0: no end), part of it left, debuff type }
+---------------------------------------------------------------------------
+local SAMPLES = {
+    buffs = {
+        { "Interface\\Icons\\Spell_Holy_WordFortitude", 0, 1800, 0.8 },
+        { "Interface\\Icons\\Spell_Nature_Regeneration", 0, 1800, 0.6 },
+        { "Interface\\Icons\\Spell_Holy_MagicalSentry", 0, 1800, 0.9 },
+        { "Interface\\Icons\\Spell_Holy_DivineSpirit", 0, 1800, 0.4 },
+        { "Interface\\Icons\\Spell_Shadow_AntiShadow", 0, 600, 0.7 },
+        { "Interface\\Icons\\Spell_Nature_Thorns", 0, 600, 0.3 },
+        { "Interface\\Icons\\Ability_Warrior_BattleShout", 0, 120, 0.5 },
+        { "Interface\\Icons\\Spell_Holy_Renew", 0, 15, 0.6 },
+        { "Interface\\Icons\\Spell_Nature_Rejuvenation", 0, 12, 0.3 },
+        { "Interface\\Icons\\Spell_Holy_InnerFire", 0, 600, 0.9 },
+        { "Interface\\Icons\\Spell_Misc_Food", 0, 900, 0.95 },
+        { "Interface\\Icons\\Spell_Nature_LightningShield", 3, 600, 0.5 },
+        { "Interface\\Icons\\Spell_Frost_FrostArmor02", 0, 0, 0 },
+        { "Interface\\Icons\\Spell_Holy_PowerWordShield", 0, 30, 0.7 },
+    },
+    debuffs = {
+        { "Interface\\Icons\\Spell_Shadow_CurseOfSargeras", 0, 24, 0.6, "Curse" },
+        { "Interface\\Icons\\Ability_Creature_Poison_02", 2, 15, 0.5, "Poison" },
+        { "Interface\\Icons\\Spell_Shadow_AbominationExplosion", 0, 18, 0.8, "Magic" },
+        { "Interface\\Icons\\Spell_Shadow_CallOfBone", 0, 30, 0.4, "Disease" },
+        { "Interface\\Icons\\Ability_Gouge", 0, 4, 0.5 },
+    },
+}
+local previews = {}
+local function PreviewFrame(kind)
+    local p = previews[kind]
+    if p then return p end
+    p = CreateFrame("Frame", nil, UIParent)
+    p.kind = kind
+    p.icons = {}
+    p:SetFrameStrata("MEDIUM")
+    -- a timer that ran out starts again
+    p:SetScript("OnUpdate", function(self, elapsed)
+        self.t = (self.t or 0) + elapsed
+        if self.t < 0.5 then return end
+        self.t = 0
+        local now = GetTime()
+        for _, b in ipairs(self.icons) do
+            local d = b.data
+            if b:IsShown() and d and d.duration > 0 and d.expires - now < 0.3 then
+                d.expires = now + d.duration
+                Fill(b, d, S(kind))
+            end
+        end
+    end)
+    previews[kind] = p
+    return p
+end
+local function ShowPreview(kind, on)
+    local s = S(kind)
+    local p = previews[kind]
+    if not (on and s.enabled) then
+        if p then p:Hide() end
+        return
+    end
+    p = PreviewFrame(kind)
+    local g = Geometry(s)
+    p:ClearAllPoints()
+    p:SetPoint(s.point[1], UIParent, s.point[2], s.point[3], s.point[4])
+    p:SetSize(g.w, g.h)
+    p:SetScale(s.scale)
+    local list, now = SAMPLES[kind], GetTime()
+    local n = math.min(#list, s.max, g.perLine * g.lines)
+    for i = 1, n do
+        local b = p.icons[i]
+        if not b then
+            b = NewIcon(p)
+            b:EnableMouse(false)
+            b:SetScript("OnEnter", nil)
+            b:SetScript("OnClick", nil)
+            p.icons[i] = b
+        end
+        Dress(b, s)
+        local line = math.floor((i - 1) / g.perLine)
+        local col = (i - 1) % g.perLine
+        b:ClearAllPoints()
+        b:SetPoint(g.point, p, g.point, col * g.x + line * g.wx, col * g.y + line * g.wy)
+        local x = list[i]
+        Fill(b, { icon = x[1], count = x[2], duration = x[3], expires = x[3] > 0 and (now + x[3] * x[4]) or 0,
+            dispel = x[5], order = i }, s)
+    end
+    for i = n + 1, #p.icons do
+        p.icons[i].data = nil
+        p.icons[i]:Hide()
+    end
+    p:Show()
 end
 
 function PA.SetUnlocked(on)
     for kind, m in pairs(movers) do m:SetShown(on and S(kind).enabled and true or false) end
+    for kind in pairs(KINDS) do
+        ShowPreview(kind, on)
+        -- the real icons out of sight while the examples show
+        local c = engineBars[kind]
+        local real = (c and c.hufHolder) or bars[kind]
+        if real then real:SetAlpha((on and S(kind).enabled) and 0 or 1) end
+    end
 end
 
 function PA.Report(add)
