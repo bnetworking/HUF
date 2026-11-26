@@ -13,6 +13,10 @@
 -- description, objectives; with Questie: who starts / ends it, where).
 -- Clicks come through LinkUtil.RegisterLinkHandler (as Questie does on
 -- Forever): replacing ItemRefTooltip:SetHyperlink taints every link click.
+-- A link type takes only one handler: with Questie on for this character, its own
+-- handler for "quest" / "questie" stays (HUF registering first made Questie's
+-- registration fail: "attempted to register a duplicate link handler for 'quest'"),
+-- so clicks open Questie's tooltip; the colours, levels and plain-text links stay HUF's.
 -- Modified clicks (shift: link again, ctrl) stay the game's.
 
 local _, ns = ...
@@ -382,6 +386,21 @@ local function Handler(link, text)
     return LPR.Handled
 end
 
+-- Questie switched on for this character (it loads after HUF, so not loaded yet here)
+local function QuestieEnabled()
+    if QK.QuestieLoaded() then return true end
+    local A = C_AddOns or {}
+    local GetState = A.GetAddOnEnableState or GetAddOnEnableState
+    if not GetState then return false end
+    local who = UnitName and UnitName("player")
+    -- C_AddOns takes (addon, character), the old global (character, addon): ask both ways
+    local ok1, a = pcall(GetState, "Questie", who)
+    local ok2, b = pcall(GetState, who, "Questie")
+    a = ok1 and tonumber(a) or 0
+    b = ok2 and tonumber(b) or 0
+    return math.max(a, b) > 0
+end
+
 local installed = false
 local function Install()
     if installed then return end
@@ -389,7 +408,9 @@ local function Install()
     for _, ev in ipairs(EVENTS) do
         if ChatFrame_AddMessageEventFilter then ChatFrame_AddMessageEventFilter(ev, Filter) end
     end
-    if LinkUtil and LinkUtil.RegisterLinkHandler and _G.LinkProcessorResponse then
+    if QuestieEnabled() then
+        QK.path = "Questie"   -- its link handler takes the clicks
+    elseif LinkUtil and LinkUtil.RegisterLinkHandler and _G.LinkProcessorResponse then
         LinkUtil.RegisterLinkHandler("quest", Handler)
         LinkUtil.RegisterLinkHandler("questie", Handler)
         QK.path = "LinkUtil"
@@ -410,7 +431,6 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("ADDON_LOADED")
 ev:SetScript("OnEvent", function(self, event, arg)
     if event == "ADDON_LOADED" and arg == "HUF" then
-        -- early, so HUF's handler comes before Questie's (Questie loads later: H < Q)
         Install()
         pcall(self.RegisterEvent, self, "QUEST_DATA_LOAD_RESULT")
         pcall(self.RegisterEvent, self, "QUEST_LOG_UPDATE")
