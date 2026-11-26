@@ -282,6 +282,7 @@ local HUF_PARTS = {
     { "chat", "Chat" }, { "damageMeter", "Damage meter" }, { "bags", "Bags" },
     { "auraBars", "Buff bars" }, { "windows", "Windows" }, { "questLog", "Quest log" },
     { "raid", "Raid frames" }, { "lootFeed", "Loot feed" }, { "tooltip", "Tooltips" },
+    { "actionBars", "Action bars" }, { "uiScale", "UI scale" }, { "resets", "Instance reset announce" },
     "OTHER",    -- every other settings table in the text, so nothing is left out silently
 }
 function ns.ProfileParts(t)
