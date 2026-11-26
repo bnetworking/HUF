@@ -61,7 +61,7 @@ end
 ---------------------------------------------------------------------------
 -- The page
 ---------------------------------------------------------------------------
-ns.RegisterPage("clickcast", "Click-cast", "general", function(page)
+ns.RegisterPage("clickcast", "Click-Casting", "general", function(page)
     local offset = 0
 
     local on = UI.Check(page, 300, "Click-casting on HUF's frames",
