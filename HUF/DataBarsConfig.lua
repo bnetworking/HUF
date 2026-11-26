@@ -10,7 +10,7 @@ local COL_W, COL2_X = 330, 366
 local function D() return ns.db.dataBars.minimap end
 local function Opt(k) return function() return D()[k] end, function(v) D()[k] = v end end
 
-local TOP = -36
+local TOP = -104     -- under the page's description, switch and tab strip
 local function SubFrame(page)
     local f = CreateFrame("Frame", nil, page)
     f:SetPoint("TOPLEFT", 0, TOP - 16)
@@ -115,7 +115,8 @@ function ns.DataBarsTab(f)
     R:Space(6)
     R:Note("The other data bars (anywhere on the screen) and their blocks: the Bars and Blocks tabs.")
     -- everything here waits for the data bar switch
-    UI.Gate(f, on, function() return D().enabled end)
+    -- (and for the Data Bars switch: the page gate greys the tab, this one must not light it up again)
+    UI.Gate(f, on, function() return ns.db.dataBars.enabled and D().enabled end)
 end
 
 ---------------------------------------------------------------------------
@@ -139,6 +140,8 @@ local function BarsPage(f)
         UI.Confirm("Delete the bar \"" .. (b.name or "Bar") .. "\"?", "Delete", function()
             table.remove(List(), selBar)
             selBar, selBlock = math.max(1, selBar - 1), 1
+            -- the last bar gone: the feature goes off (the minimap bar keeps it on)
+            if #List() == 0 and not D().enabled then DB.SetEnabled(false) end
             Changed()
         end, "Keep it")
     end)
@@ -356,9 +359,24 @@ ns.RegisterPage("databars", "Data Bars", "general", function(page)
         for n, sf in pairs(subs) do sf:SetShown(n == k) end
         strip:Select(k)
     end
+    -- what a data bar is, and the feature's own switch (everything else waits for it)
+    local intro = UI.Label(page, "A Data Bar is a small piece of information you can put anywhere on your screen. You can have multiple data bars.")
+    intro:SetPoint("TOPLEFT", 0, -22)
+    intro:SetWidth(ns.PAGE_W)
+    intro:SetJustifyH("LEFT")
+    intro:SetTextColor(0.75, 0.75, 0.75)
+    intro.hufNoGate = true
+    local master = UI.Check(page, 300, "Use Data Bars", function() return ns.db.dataBars.enabled end, function(v)
+        DB.SetEnabled(v)
+        selBar, selBlock = 1, 1
+        Changed()
+    end, "Off: no data bar shows (also not the minimap bar) and these settings are greyed out. On: with no bar yet, HUF makes the first one with FPS, latency and your team's gold (MMT).")
+    master:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -6)   -- the line may wrap
+    master.hufNoGate = true
+    UI.Gate(page, master, function() return ns.db.dataBars.enabled end)
     strip = UI.SubTabs(page, tabs, Show)
-    strip:SetPoint("TOPLEFT", 0, -22)
-    strip:SetPoint("TOPRIGHT", 0, -22)
+    strip:SetPoint("TOPLEFT", 0, -80)
+    strip:SetPoint("TOPRIGHT", 0, -80)
     subs.bars = SubFrame(page); BarsPage(subs.bars)
     subs.blocks = SubFrame(page); BlocksPage(subs.blocks)
     subs.minimap = SubFrame(page); ns.DataBarsTab(subs.minimap)
@@ -368,6 +386,7 @@ ns.RegisterPage("databars", "Data Bars", "general", function(page)
     page.OnRefresh = function() subs.blocks.ShowTypeOptions() end
     subs.blocks.ShowTypeOptions()
 end, function()
+    if not ns.db.dataBars.enabled then return false end
     if ns.db.dataBars.minimap.enabled then return true end
     for _, b in ipairs(ns.db.dataBars.bars) do if b.enabled then return true end end
     return false

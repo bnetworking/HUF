@@ -794,6 +794,7 @@ local function BuildDefaults()
         },
         -- data bars: for now the minimap data bar (DataBars.lua)
         dataBars = {
+            enabled = false,                -- the whole feature (General > Data Bars); off: no data bar shows
             minimap = {
                 enabled = false,
                 position = "BELOW",         -- BELOW | ABOVE the map
@@ -1460,6 +1461,19 @@ ns.On("ADDON_LOADED", function(name)
             if type(p) == "table" and type(p.actionBars) == "table" then p.actionBars.fillGaps = false end
         end
         HUFDB.dataVersion = 27
+    end
+    -- 28: data bars got a switch of their own (off by default); profiles already
+    -- using them (a free bar or the minimap bar) keep them on
+    if HUFDB.dataVersion < 28 then
+        for _, p in pairs(HUFDB.profiles or {}) do
+            local d = type(p) == "table" and p.dataBars
+            if type(d) == "table" and d.enabled == nil then
+                local used = type(d.bars) == "table" and #d.bars > 0
+                    or (type(d.minimap) == "table" and d.minimap.enabled == true)
+                d.enabled = used and true or false
+            end
+        end
+        HUFDB.dataVersion = 28
     end
     HUFDB.profiles = HUFDB.profiles or {}
     HUFDB.chars = HUFDB.chars or {}

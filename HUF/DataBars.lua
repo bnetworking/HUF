@@ -209,7 +209,7 @@ end
 
 function DB.Apply()
     local s = S()
-    if not s.enabled or not Minimap then
+    if not s.enabled or not ns.db.dataBars.enabled or not Minimap then
         if bar then bar:Hide() end
         return
     end
@@ -280,7 +280,7 @@ local A = ns.ACCENT
 DB.BAR_DEFAULTS = {
     enabled = true, name = "Bar",
     point = "CENTER", relPoint = "CENTER", x = 0, y = -200,
-    width = 400, height = 22,
+    width = 185, height = 22,
     look = "FLAT",              -- FLAT (solid colour, a line around it) | SOFT (dark, see-through, faded ends)
     bgColor = { r = 0.067, g = 0.067, b = 0.067 }, bgAlpha = 0.95, softAlpha = 0.5,
     borderSize = 1,
@@ -695,7 +695,8 @@ end
 
 function DB.ApplyBars()
     local live = {}
-    for _, cfg in ipairs(Bars()) do
+    -- the feature off (General > Data Bars): no bar at all
+    for _, cfg in ipairs(ns.db.dataBars.enabled and Bars() or {}) do
         live[cfg] = true
         DB.ApplyBar(cfg)
     end
@@ -708,14 +709,27 @@ function DB.ApplyBars()
 end
 
 -- a new bar (from the settings page), a little under the screen's centre
-function DB.NewBar()
+function DB.NewBar(types)
     local cfg = ns.CopyTable(DB.BAR_DEFAULTS)
     cfg.name = "Bar " .. (#Bars() + 1)
     cfg.y = -200 - 30 * #Bars()
-    cfg.blocks = { BL.New("fps"), BL.New("ms"), BL.New("clock") }
-    cfg.blocks[3].fill = true
+    cfg.blocks = {}
+    for _, t in ipairs(types or { "fps", "ms", "clock" }) do
+        local b = BL.New(t)
+        if b then cfg.blocks[#cfg.blocks + 1] = b end
+    end
+    if #cfg.blocks > 0 then cfg.blocks[#cfg.blocks].fill = true end
     table.insert(Bars(), cfg)
     return cfg
+end
+
+-- the feature on / off (General > Data Bars); turning it on with no bar makes
+-- the first one: FPS, latency and the team's gold (that one only shows with MMT)
+function DB.SetEnabled(on)
+    ns.db.dataBars.enabled = on and true or false
+    if on and #Bars() == 0 then DB.NewBar({ "fps", "ms", "teamgold" }) end
+    if not on and DB.arranging then DB.SetArranging(false) end
+    ns.Log("databars", "data bars %s (%d bars)", on and "on" or "off", #Bars())
 end
 
 -- every block's text: each second (the ticking ones) and on their events
