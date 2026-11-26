@@ -10,7 +10,7 @@ local COL_W, COL2_X = 330, 366
 local function D() return ns.db.dataBars.minimap end
 local function Opt(k) return function() return D()[k] end, function(v) D()[k] = v end end
 
-local TOP = -104     -- under the page's description, switch and tab strip
+local TOP = -69      -- under the page's description, switch and tab strip
 local function SubFrame(page)
     local f = CreateFrame("Frame", nil, page)
     f:SetPoint("TOPLEFT", 0, TOP - 16)
@@ -361,7 +361,7 @@ ns.RegisterPage("databars", "Data Bars", "general", function(page)
     end
     -- what a data bar is, and the feature's own switch (everything else waits for it)
     local intro = UI.Label(page, "A Data Bar is a small piece of information you can put anywhere on your screen. You can have multiple data bars.")
-    intro:SetPoint("TOPLEFT", 0, -22)
+    intro:SetPoint("TOPLEFT", 0, 13)      -- right under the page title
     intro:SetWidth(ns.PAGE_W)
     intro:SetJustifyH("LEFT")
     intro:SetTextColor(0.75, 0.75, 0.75)
@@ -375,8 +375,8 @@ ns.RegisterPage("databars", "Data Bars", "general", function(page)
     master.hufNoGate = true
     UI.Gate(page, master, function() return ns.db.dataBars.enabled end)
     strip = UI.SubTabs(page, tabs, Show)
-    strip:SetPoint("TOPLEFT", 0, -80)
-    strip:SetPoint("TOPRIGHT", 0, -80)
+    strip:SetPoint("TOPLEFT", 0, -45)
+    strip:SetPoint("TOPRIGHT", 0, -45)
     subs.bars = SubFrame(page); BarsPage(subs.bars)
     subs.blocks = SubFrame(page); BlocksPage(subs.blocks)
     subs.minimap = SubFrame(page); ns.DataBarsTab(subs.minimap)
