@@ -418,6 +418,10 @@ local BUTTONS = {
       blizzard = "ChatFrameChannelButton", tip = "Chat channels" },
     { key = "chatmenu", icon = "Interface\\ChatFrame\\UI-ChatIcon-Chat-Up", blizzard = "ChatFrameMenuButton",
       tip = "Language, emotes, chat type" },
+    -- the game's voice chat mute / deafen buttons: moved here and left VISIBLE (their
+    -- icon shows the muted / deafened state); only while the game shows them (in voice chat)
+    { key = "voicemute", blizzard = "ChatFrameToggleVoiceMuteButton", visible = true, tip = "Voice chat: mute" },
+    { key = "voicedeafen", blizzard = "ChatFrameToggleVoiceDeafenButton", visible = true, tip = "Voice chat: deafen" },
     { key = "settings", icon = "Interface\\Buttons\\UI-OptionsButton", tip = "HUF settings",
       click = function() if ns.ToggleConfig then ns.ToggleConfig("chat", true) end end },
     { key = "bottom", icon = "Interface\\ChatFrame\\UI-ChatIcon-ScrollEnd-Up", tip = "To the newest line",
@@ -470,13 +474,14 @@ local function BuildBar()
         b.icon = b:CreateTexture(nil, "ARTWORK")
         b.icon:SetPoint("TOPLEFT", 3, -3)
         b.icon:SetPoint("BOTTOMRIGHT", -3, 3)
-        if not (info.atlas and b.icon.SetAtlas and pcall(b.icon.SetAtlas, b.icon, info.atlas)) then
+        if not (info.atlas and b.icon.SetAtlas and pcall(b.icon.SetAtlas, b.icon, info.atlas)) and info.icon then
             b.icon:SetTexture(info.icon)
         end
         if info.key == "guild" then b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
         b:RegisterForClicks("LeftButtonUp")
         if info.click then b:SetScript("OnClick", info.click) end
         b.blizzard = info.blizzard
+        b.visible = info.visible
         b:SetScript("OnEnter", function(self)
             self.border:SetColor(A[1], A[2], A[3], 1)
             if info.key == "guild" then GuildTooltip(self) return end
@@ -530,7 +535,15 @@ local function Seat(b, on)
         if real.SetFixedFrameLevel then real:SetFixedFrameLevel(false) end
         real:SetFrameLevel(b:GetFrameLevel() + 3)
         if real.SetFixedFrameLevel then real:SetFixedFrameLevel(true) end
-        real:SetAlpha(0)
+        if b.visible then
+            -- shown as it is (its own icon and state) in HUF's slot; its parent (the
+            -- hidden button column) is see-through, so it ignores the parent's alpha
+            if real.SetIgnoreParentAlpha then real:SetIgnoreParentAlpha(true) end
+            real:SetAlpha(bar:GetAlpha())
+            b.icon:Hide()
+        else
+            real:SetAlpha(0)
+        end
         real:EnableMouse(true)
     else
         -- not wanted: hidden away (its place belongs to the game's chat layout)
@@ -539,6 +552,26 @@ local function Seat(b, on)
         real:EnableMouse(false)
     end
     return true
+end
+
+-- the bar's alpha (fading), also for the game's buttons shown in it
+local function SetBarAlpha(a)
+    if not bar then return end
+    if math.abs(bar:GetAlpha() - a) > 0.001 then bar:SetAlpha(a) end
+    for real, b in pairs(seated) do
+        if b.visible and b:IsShown() and bar:IsShown() then real:SetAlpha(a) end
+    end
+end
+
+-- the voice buttons come and go with voice chat (the game shows / hides them):
+-- the strip follows (a slot only while its button is shown)
+local watched = {}
+local function Watch(real)
+    if watched[real] then return end
+    watched[real] = true
+    local function Again() C_Timer.After(0, function() if Chat.LayoutBar then Chat.LayoutBar() end end) end
+    real:HookScript("OnShow", Again)
+    real:HookScript("OnHide", Again)
 end
 
 local function LayoutBar()
@@ -551,6 +584,11 @@ local function LayoutBar()
         local on = s.buttons[b.key]
         if b.key == "guild" and not (IsInGuild and IsInGuild()) then on = false end
         if b.blizzard and not _G[b.blizzard] then on = false end
+        if on and b.visible then
+            local real = _G[b.blizzard]
+            Watch(real)
+            if not real:IsShown() then on = false end      -- not in voice chat
+        end
         b:ClearAllPoints()
         local size = s.iconSize or 22
         if on then
@@ -622,6 +660,7 @@ local function LayoutBar()
     Chat.UpdateGuildCount()
     Chat.Wake()
 end
+Chat.LayoutBar = LayoutBar
 
 ---------------------------------------------------------------------------
 -- Fading the buttons: down to fadeAlpha after fadeDelay seconds, full again
@@ -630,7 +669,7 @@ end
 local idle = 0
 function Chat.Wake()
     idle = 0
-    if bar then bar:SetAlpha(1) end
+    SetBarAlpha(1)
 end
 
 local function MouseOverChat()
@@ -657,19 +696,19 @@ C_Timer.NewTicker(0.2, function()
     local s = S()
     local whole = s.fadeWhole and Chat.SetWholeAlpha
     if not (s.enabled and s.fade) then
-        if bar:GetAlpha() ~= 1 then bar:SetAlpha(1) end
+        SetBarAlpha(1)
         if Chat.SetWholeAlpha then Chat.SetWholeAlpha(1) end
         return
     end
     if MouseOverChat() then
         idle = 0
-        if bar:GetAlpha() ~= 1 then bar:SetAlpha(1) end
+        SetBarAlpha(1)
         if Chat.SetWholeAlpha then Chat.SetWholeAlpha(1) end
         return
     end
     idle = idle + 0.2
     if idle >= s.fadeDelay then
-        if math.abs(bar:GetAlpha() - s.fadeAlpha) > 0.01 then bar:SetAlpha(s.fadeAlpha) end
+        if math.abs(bar:GetAlpha() - s.fadeAlpha) > 0.01 then SetBarAlpha(s.fadeAlpha) end
         if whole then Chat.SetWholeAlpha(s.fadeAlpha) end
     elseif Chat.SetWholeAlpha then
         Chat.SetWholeAlpha(1)

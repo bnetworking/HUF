@@ -707,7 +707,7 @@ local function BuildDefaults()
             classColors = true, urls = true, linkTooltips = true,
             history = true, historyLines = 2000,
             buttons = { copy = true, guild = true, social = false, channels = true, chatmenu = true, bottom = false,
-                        settings = false },
+                        settings = false, voicemute = true, voicedeafen = true },   -- voice: only while in voice chat
             buttonSide = "RIGHT", buttonX = 8, buttonY = 0,
             fade = true, fadeAlpha = 0.4, fadeDelay = 5, hideStock = true,     -- the buttons fade while the mouse is elsewhere
             inputPos = "BELOW", inputOffset = 0,              -- the input line: BELOW | ABOVE the chat
