@@ -484,6 +484,8 @@ SlashCmdList.HUF = function(msg)
         ns.Movers.SetUnlocked(true)
     elseif cmd == "lock" then
         ns.Movers.SetUnlocked(false)
+    elseif cmd == "blocks" or cmd == "arrange" then
+        if ns.DataBars and ns.DataBars.ToggleArranging then ns.DataBars.ToggleArranging() end
     elseif ns.UNIT_BY_KEY[cmd] then
         ns.ToggleConfig(cmd, true)
     elseif cmd == "scale" then

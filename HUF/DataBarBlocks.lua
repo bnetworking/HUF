@@ -1,5 +1,5 @@
 -- HUF: the blocks a data bar can show (FPS, latency, clock, gold, audio,
--- durability, combat, friends, guild). Each type: its icon (the game's own
+-- durability, combat, friends, guild; more in DataBarBlocksMore.lua). Each type: its icon (the game's own
 -- art), its text, tooltip, clicks and when it updates. DataBars.lua builds the
 -- bars and lays the blocks out.
 
@@ -377,10 +377,17 @@ Type("guild", {
     end,
 })
 
--- the choices for the settings page
+-- for the other block files (DataBarBlocksMore.lua)
+BL.Type, BL.Line, BL.Grade, BL.Money, BL.Abbrev = Type, Line, Grade, Money, Abbrev
+
+-- the choices for the settings page (a type with available() only while that is true:
+-- the MMT team blocks while MMT is on)
 function BL.Choices()
     local l = {}
-    for _, k in ipairs(BL.ORDER) do l[#l + 1] = { value = k, text = BL.TYPES[k].title } end
+    for _, k in ipairs(BL.ORDER) do
+        local def = BL.TYPES[k]
+        if not def.available or def.available() then l[#l + 1] = { value = k, text = def.title } end
+    end
     return l
 end
 
@@ -390,6 +397,7 @@ function BL.New(key)
     if not def then return nil end
     return {
         type = key, scale = 100, align = "CENTER", padL = 10, padR = 10, fill = false,
+        width = 0,              -- a width of its own (dragging its edge while arranging); 0 = from its content
         center = false,         -- kept in the middle of the bar (spacing by content)
         showIcon = def.showIcon and true or false,
         textColor = "WHITE", textCustom = { r = 1, g = 1, b = 1 },

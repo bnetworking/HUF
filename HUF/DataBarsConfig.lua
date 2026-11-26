@@ -124,6 +124,10 @@ end
 local function BarsPage(f)
     local L = UI.Column(f, 0, 0, COL_W)
     PickBar(L)
+    L:Button("Arrange blocks (drag them on the bars)", function()
+        DB.SetArranging(true)
+        if ns.HideConfig then ns.HideConfig() end
+    end)
     L:Button("New bar", function()
         DB.NewBar()
         selBar, selBlock = #List(), 1
@@ -219,6 +223,34 @@ local TYPE_OPTIONS = {
         C:Cycle("Volume of", l, SOpt("channel"))
         C:Cycle("Show as", { { value = "TEXT", text = "Text (63%)" }, { value = "BAR", text = "A bar" } }, SOpt("style"))
     end,
+    bags = function(C)
+        C:Cycle("Show", { { value = "FREE", text = "Free slots (12)" }, { value = "USED", text = "Used / all (68/80)" },
+            { value = "BOTH", text = "Free / all (12 / 80)" } }, SOpt("show"))
+    end,
+    location = function(C)
+        local g, s = SOpt("subzone")
+        C:Check("Subzone", g, s, "The part of the zone you are in (Goldshire) when there is one; off: the zone.")
+    end,
+    xprep = function(C)
+        C:Cycle("Show", { { value = "AUTO", text = "XP, at the top level reputation" }, { value = "XP", text = "XP" },
+            { value = "REP", text = "Reputation" } }, SOpt("show"))
+    end,
+    currency = function(C)
+        C:Cycle("Currency", function()
+            local l = { { value = "", text = "The first one you have" } }
+            for _, c in ipairs(BL.Currencies()) do l[#l + 1] = { value = c.name, text = c.name } end
+            return l
+        end, SOpt("name"))
+    end,
+    profession = function(C)
+        C:Cycle("Profession", { { value = 1, text = "The first" }, { value = 2, text = "The second" } }, SOpt("which"))
+    end,
+    stat = function(C)
+        local l = {}
+        for _, s in ipairs(BL.STATS) do l[#l + 1] = { value = s.key, text = s.name } end
+        C:Cycle("Stat", l, SOpt("stat"))
+        C:Note("Right-click the block: the next stat.")
+    end,
     combat = function(C)
         local g, s = SOpt("onlyInCombat")
         C:Check("Only in combat", g, s, "Out of combat the block is empty.")
@@ -230,6 +262,10 @@ local TYPE_OPTIONS = {
 local function BlocksPage(f)
     local L = UI.Column(f, 0, 0, COL_W)
     PickBar(L)
+    L:Button("Arrange blocks (drag them on the bars)", function()
+        DB.SetArranging(true)
+        if ns.HideConfig then ns.HideConfig() end
+    end)
     L:Cycle("Block", BlockChoices, function() return Block() and selBlock end,
         function(v) selBlock = v if ns.RefreshConfig then ns.RefreshConfig() end end)
     L:Button("Add a block", function(self)
