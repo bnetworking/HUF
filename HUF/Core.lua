@@ -630,6 +630,8 @@ local function BuildDefaults()
             -- who: loot of SELF | TEAM (MMT team) | GROUP; not set: TEAM with MMT loaded, else SELF (LootFeed.Who)
             classColors = true,         -- others' names in their class colour
         },
+        -- UI scale below the game's 0.64 (UIScale.lua); off: the game's own UI Scale
+        uiScale = { enabled = false, scale = 0.64 },
         bags = {
             enabled = true,
             oneBag = true,              -- the game's "combined bags" option

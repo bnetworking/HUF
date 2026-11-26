@@ -315,6 +315,7 @@ function ns.FrameReport(add)
     if ns.Minimap then ns.Minimap.Report(add) end
     if ns.PlayerAuras then ns.PlayerAuras.Report(add) end
     if ns.Chat then ns.Chat.Report(add) end
+    if ns.UIScale then ns.UIScale.Report(add) end
     if ns.Bags then ns.Bags.Report(add) end
     if ns.Windows then ns.Windows.Report(add) end
     if ns.QuestLog then ns.QuestLog.Report(add) end

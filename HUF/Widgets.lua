@@ -138,9 +138,12 @@ function UI.Slider(parent, width, text, min, max, step, get, set, fmt)
         if c.input and not c.input:HasFocus() then c.input:SetText(fmt:format(get())) end
         updating = false
     end
-    -- the value as a small edit box too: drag the slider or type a number
-    function c.EnableInput()
+    -- the value as a small edit box too: drag the slider or type a number.
+    -- typedStep: what a typed value is rounded to (default: the slider's step), e.g.
+    -- 0.0001 for the UI scale, which takes any value typed while dragging keeps its steps
+    function c.EnableInput(typedStep)
         if c.input then return c end
+        local ts = typedStep or step
         value:Hide()
         local e = CreateFrame("EditBox", nil, c)
         e:SetSize(46, 15)
@@ -154,9 +157,9 @@ function UI.Slider(parent, width, text, min, max, step, get, set, fmt)
         local function Commit()
             local v = tonumber(e:GetText())
             if v then
-                v = math.max(min, math.min(max, math.floor(v / step + 0.5) * step))
+                v = math.max(min, math.min(max, math.floor(v / ts + 0.5) * ts))
                 local old = get()
-                if not (type(old) == "number" and math.abs(old - v) < step / 1000) then
+                if not (type(old) == "number" and math.abs(old - v) < ts / 1000) then
                     set(v)
                     ns.Log("config", "%s = %s", text, v)
                     ns.Refresh()

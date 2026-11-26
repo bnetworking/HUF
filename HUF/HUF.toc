@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: HUF - Hivemind Unitframes
 ## Notes: Dark, minimalist unit frames (player, target, target of target, pet, group, nameplates), damage meter, minimap and click-casting. Works with MMT's privacy settings. Type /huf for settings.
-## Version: 0.5.58
+## Version: 0.5.59
 ## Author: bnetworking
 ## X-License: GPL-3.0
 ## X-Repository: https://github.com/bnetworking/HUF
@@ -32,6 +32,7 @@ Minimap.lua
 PlayerAuras.lua
 Chat.lua
 Bags.lua
+UIScale.lua
 Windows.lua
 QuestLog.lua
 QuestLinks.lua

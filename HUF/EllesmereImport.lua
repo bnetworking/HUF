@@ -1471,6 +1471,18 @@ local function Convert(prof, uf, np, npOn, dm, dmOn)
         parts[#parts + 1] = { title = "Instance reset announce", tbl = out.resets, on = true, path = { "resets" } }
     end
 
+    -- UI scale: EllesmereUI's own (account-wide, EllesmereUIDB.ppUIScale - not in its profile strings)
+    local edb = _G.EllesmereUIDB
+    local pp = type(edb) == "table" and tonumber(edb.ppUIScale)
+    if pp and ns.UIScale and type(out.uiScale) == "table" then
+        out.uiScale.enabled = true
+        out.uiScale.scale = ns.UIScale.Clamp(pp)
+        what[#what + 1] = "UI scale"
+        parts[#parts + 1] = { title = ("UI scale (%.2f)"):format(out.uiScale.scale), tbl = out.uiScale, on = true,
+            path = { "uiScale" }, why = "Ellesmere's UI scale" }
+        notes[#notes + 1] = "UI scale: HUF uses it once EllesmereUI is off (while it is on, EllesmereUI sets the scale)."
+    end
+
     -- font and outline (Ellesmere's Unit Frames font, else its global one)
     if not uf then return true, out, Unique(notes), what, parts end
 

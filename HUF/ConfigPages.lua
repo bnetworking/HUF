@@ -219,7 +219,6 @@ ns.RegisterPage("general", "General", "general", function(page)
     local gx, sx = Opt(G, "shortenTexts")
     L:Check("Avoid overlapping texts", gx, sx,
         "When an object, like the player health bar, has a text set on the left side (like the name) and one on the right side (like %HP) it may happen that they clip into each other. Enabling this option will avoid this by truncating texts if necessary.")
-
     -- Loot Feed (LootFeedConfig.lua) -----------------------------------------
     local LOOT_Y = -(LOOK_H + TILE_GAP)
     ns.BuildLootFeedTile(page, 0, LOOT_Y, TILE_W, H + LOOT_Y)
@@ -282,8 +281,38 @@ ns.RegisterPage("general", "General", "general", function(page)
         function(v) G().gameMenuButton = v if ns.RelayoutGameMenu then ns.RelayoutGameMenu() end end,
         "A HUF button below the game menu (Esc) opens these settings.")
 
+    -- UI Scale (UIScale.lua) -----------------------------------------------
+    local US_H = 124
+    local US_Y = -(FF_H + TILE_GAP)
+    local _, U_ = Tile(page, X2, US_Y, TILE_W, US_H, "UI Scale", "Interface\\Icons\\INV_Misc_Spyglass_02")
+    -- below the game's 0.64, like EllesmereUI
+    local US = ns.UIScale
+    local U = function() return ns.db.uiScale end
+    local scaleSlider
+    U_:Check("Use HUF's UI scale", function() return U().enabled end, function(v)
+        U().enabled = v
+        if v then US.Apply()
+        elseif not US.Restore() then ns.AskReload("The game's own UI scale comes back after a reload.") end
+    end, "Sets the scale of the whole interface itself, from 0.40 to 1.15 - the game's own UI Scale stops at 0.64. Off: the game's UI Scale (Esc > Options) as before."
+        .. (US.EllesmereOwns() and "\n\nEllesmereUI is loaded and sets the scale itself, so HUF leaves it alone while EllesmereUI is on." or ""))
+    -- drag: steps of 0.01; the box takes any value typed (0.5333 ...)
+    scaleSlider = U_:Slider("UI scale", US.MIN, US.MAX, 0.01, function() return US.Clamp(U().scale) end, function(v)
+        U().scale = US.Clamp(v)
+        US.ApplySoon()
+    end, "%.4f")
+    scaleSlider.EnableInput(0.0001)
+    U_:Button("Pixel perfect for this screen", function()
+        local v = US.PixelPerfect()
+        if not v then return end
+        U().scale = US.Clamp(v)
+        if scaleSlider and scaleSlider.Refresh then scaleSlider.Refresh() end
+        US.Apply()
+        ns.Print("UI scale %.4f (768 / %d screen lines)%s.", U().scale, select(2, GetPhysicalScreenSize()),
+            U().enabled and "" or " - tick \"Use HUF's UI scale\" to use it")
+    end)
+
     -- Addon Support ---------------------------------------------------------
-    local AS_Y = -(FF_H + TILE_GAP)
+    local AS_Y = US_Y - US_H - TILE_GAP
     local as, S = Tile(page, X2, AS_Y, TILE_W, H + AS_Y, "Addon Support", "Interface\\Icons\\INV_Misc_Book_09")
     local mmtLoaded = function() return type(_G.MMT) == "table" end
     local mmtCheck, privCheck, nameDrop
